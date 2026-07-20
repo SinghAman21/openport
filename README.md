@@ -64,6 +64,14 @@ inline validation. Anything destructive opens a confirmation. **`esc` closes
 whatever is open**, always — the modal layer handles it before the content
 does, so no widget can leave you stranded in a popup.
 
+The mouse wheel scrolls whatever is on top — table, menu, palette or help.
+Mouse tracking does mean your terminal's own click-drag selection is taken
+over; hold `shift` while dragging to select text as usual.
+
+Anything that takes a moment says so. Scanning for a free port binds each
+candidate to check it is genuinely available, so the status bar shows a spinner
+and what it is doing rather than leaving you wondering whether it has hung.
+
 The layout degrades rather than disappearing. Narrow the window and the ports
 table sheds its least important columns, the detail pane moves underneath the
 table instead of vanishing, and the tab strip falls back to bare numbers so the
@@ -86,6 +94,7 @@ Arrows and Vim keys work everywhere; neither is second-class.
 | `?` | help overlay (shows the active view's bindings too) |
 | `1`–`7` | jump to a view |
 | `r` | refresh |
+| `ctrl+z` | suspend to the shell (`fg` to return; it refreshes on the way back) |
 | `ctrl+d` | dump model state to `./openport-debug.log` |
 
 In the Ports view:

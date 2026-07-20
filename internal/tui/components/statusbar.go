@@ -25,6 +25,10 @@ type StatusBar struct {
 	// Message overrides the hints with a transient line (used for toasts on
 	// short terminals).
 	Message string
+	// Busy is the spinner plus a label for whatever is in flight. Async work
+	// with no acknowledgement reads as a hang, and some of it — scanning for a
+	// free port — genuinely takes a moment.
+	Busy string
 }
 
 // View renders the bar to exactly width cells.
@@ -38,6 +42,9 @@ func (s StatusBar) View(theme styles.Theme, width int) string {
 	}
 	if s.Selection != "" {
 		left += theme.StatusHint.Render("  " + styles.GlyphArrow + " " + s.Selection)
+	}
+	if s.Busy != "" {
+		left += "  " + s.Busy
 	}
 
 	// The hints get whatever room is left after the left half. A view can

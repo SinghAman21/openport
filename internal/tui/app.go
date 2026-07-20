@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -54,6 +55,12 @@ type Model struct {
 	toasts    []components.Toast
 	nextToast int
 
+	// Work in flight. Several operations can overlap — a group health check
+	// fans out one probe per port — so this is a count, not a flag.
+	spinner   spinner.Model
+	busy      int
+	busyLabel string
+
 	// Watch state. watchCh is what the re-arming subscription reads from.
 	watching    bool
 	watchCh     <-chan []ports.Port
@@ -89,6 +96,11 @@ func New(svc ports.Service, st store.Store, provider opsync.SyncProvider, initia
 
 	wd, _ := os.Getwd()
 
+	spin := spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithStyle(theme.Accent),
+	)
+
 	return Model{
 		svc:      svc,
 		store:    st,
@@ -113,6 +125,10 @@ func New(svc ports.Service, st store.Store, provider opsync.SyncProvider, initia
 		workDir:       wd,
 		keys:          DefaultKeyMap(),
 		theme:         theme,
+		spinner:       spin,
+		// The first listing is already on its way from Init.
+		busy:      1,
+		busyLabel: "reading ports",
 	}
 }
 
@@ -121,7 +137,41 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		listPortsCmd(m.svc),
 		loadDataCmd(m.store, m.workDir),
+		m.spinner.Tick,
+		m.windowTitle(),
 	)
+}
+
+// windowTitle names the terminal tab. With several terminals open, "which one
+// is watching my ports" is otherwise guesswork.
+func (m Model) windowTitle() tea.Cmd {
+	title := "openport — " + m.route.String()
+	if m.watching {
+		title = "● " + title
+	}
+	return tea.SetWindowTitle(title)
+}
+
+// startBusy records an operation in flight and returns the command that keeps
+// the spinner animating. Only the transition from idle starts a new tick loop;
+// overlapping work shares it.
+func (m *Model) startBusy(label string) tea.Cmd {
+	m.busy++
+	m.busyLabel = label
+	if m.busy == 1 {
+		return m.spinner.Tick
+	}
+	return nil
+}
+
+// endBusy marks one operation finished.
+func (m *Model) endBusy() {
+	if m.busy > 0 {
+		m.busy--
+	}
+	if m.busy == 0 {
+		m.busyLabel = ""
+	}
 }
 
 // --- Update --------------------------------------------------------------
@@ -135,9 +185,55 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(t)
+
+	case tea.MouseMsg:
+		return m.handleMouse(t)
+
+	case spinner.TickMsg:
+		// Only keep the animation running while there is something to
+		// animate; forwarding the tick is what schedules the next one.
+		if m.busy == 0 {
+			return m, nil
+		}
+		s, cmd := m.spinner.Update(t)
+		m.spinner = s
+		return m, cmd
+
+	case tea.ResumeMsg:
+		// Time passed while suspended, so whatever is on screen is stale.
+		return m.refresh()
 	}
 
 	return m.handleMessage(message)
+}
+
+// handleMouse translates wheel scrolling into cursor motion. The program asks
+// for mouse events, so it owes the user something in return for taking them —
+// an enabled mouse that does nothing just costs them their terminal's own
+// selection behaviour.
+func (m Model) handleMouse(mouse tea.MouseMsg) (tea.Model, tea.Cmd) {
+	var key tea.KeyMsg
+	switch mouse.Button {
+	case tea.MouseButtonWheelUp:
+		key = tea.KeyMsg{Type: tea.KeyUp}
+	case tea.MouseButtonWheelDown:
+		key = tea.KeyMsg{Type: tea.KeyDown}
+	default:
+		return m, nil
+	}
+
+	// Scroll whatever is on top, matching where the keyboard would go.
+	if m.modal != nil {
+		modal, cmd := m.modal.Update(key)
+		m.modal = modal
+		return m, cmd
+	}
+	if m.palette.IsOpen() {
+		palette, cmd := m.palette.Update(key)
+		m.palette = palette
+		return m, cmd
+	}
+	return m.forwardToActive(key)
 }
 
 // handleKey implements the input-routing order: a modal eats keys first, then
@@ -210,6 +306,10 @@ func (m Model) handleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(keyMsg, m.keys.Debug):
 		return m, dumpStateCmd(m.debugDump())
+
+	case key.Matches(keyMsg, m.keys.Suspend):
+		// Hand the terminal back to the shell; ResumeMsg refreshes on return.
+		return m, tea.Suspend
 
 	case key.Matches(keyMsg, m.keys.GotoPorts):
 		return m.navigate(msg.RoutePorts)
@@ -290,7 +390,7 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 	// --- port intents ---
 
 	case msg.ListPortsMsg:
-		return m, listPortsCmd(m.svc)
+		return m, tea.Batch(m.startBusy("reading ports"), listPortsCmd(m.svc))
 
 	case msg.CheckPortMsg:
 		return m, checkPortCmd(m.svc, t.Port)
@@ -305,13 +405,17 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.confirmKillRange(t)
 
 	case msg.SuggestPortMsg:
-		return m, suggestCmd(m.svc, t.Near, t.Count)
+		// This one can scan hundreds of ports, binding each to check it is
+		// really free, so it is the most important to acknowledge.
+		return m, tea.Batch(m.startBusy("finding a free port"),
+			suggestCmd(m.svc, t.Near, t.Count))
 
 	case msg.ReservePortMsg:
 		return m, reserveCmd(m.svc, t.Port, t.Service)
 
 	case msg.HealthCheckMsg:
-		return m, healthCmd(m.svc, t.Port, t.Kind)
+		return m, tea.Batch(m.startBusy("checking health"),
+			healthCmd(m.svc, t.Port, t.Kind))
 
 	case msg.ToggleProtectedMsg:
 		return m, toggleProtectedCmd(m.store, t.Port)
@@ -323,7 +427,8 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.confirmGroupAction(t)
 
 	case msg.ApplyBlueprintMsg:
-		return m, applyBlueprintCmd(m.svc, m.store, t.Name)
+		return m, tea.Batch(m.startBusy("applying "+t.Name),
+			applyBlueprintCmd(m.svc, m.store, t.Name))
 
 	// --- store intents ---
 
@@ -438,6 +543,7 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 // --- result handlers -----------------------------------------------------
 
 func (m Model) onPortsLoaded(t msg.PortsLoadedMsg) (tea.Model, tea.Cmd) {
+	m.endBusy()
 	if t.Err == nil {
 		m.lastPorts = t.Ports
 	}
@@ -549,6 +655,7 @@ func processLabel(p string) string {
 }
 
 func (m Model) onSuggested(t msg.SuggestedMsg) (tea.Model, tea.Cmd) {
+	m.endBusy()
 	if t.Err != nil {
 		return m.withToast(msg.Error(t.Err.Error()))
 	}
@@ -569,6 +676,7 @@ func (m Model) onReserved(t msg.ReservedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) onHealthResult(t msg.HealthResultMsg) (tea.Model, tea.Cmd) {
+	m.endBusy()
 	cmd := m.broadcastCmd(t)
 	if t.Err != nil {
 		model, toastCmd := m.withToast(msg.Error(t.Err.Error()))
@@ -607,6 +715,7 @@ func (m Model) onSaved(t msg.SavedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) onBlueprintApplied(t msg.BlueprintAppliedMsg) (tea.Model, tea.Cmd) {
+	m.endBusy()
 	cmd := m.broadcastCmd(t)
 	if t.Err != nil {
 		model, toastCmd := m.withToast(msg.Error(t.Err.Error()))
@@ -1221,7 +1330,8 @@ func (m Model) toggleWatch() (tea.Model, tea.Cmd) {
 		m.watching = false
 		m.watchCh = nil
 		m.portsView.SetWatching(false)
-		return m.withToast(msg.Info("Watch mode off"))
+		model, cmd := m.withToast(msg.Info("Watch mode off"))
+		return model, tea.Batch(cmd, m.windowTitle())
 	}
 
 	// Background context: the returned cancel func is what tears the poller
@@ -1233,7 +1343,7 @@ func (m Model) toggleWatch() (tea.Model, tea.Cmd) {
 	m.portsView.SetWatching(true)
 
 	model, toastCmd := m.withToast(msg.Info("Watch mode on"))
-	return model, tea.Batch(toastCmd, watchCmd(ch))
+	return model, tea.Batch(toastCmd, watchCmd(ch), m.windowTitle())
 }
 
 // --- helpers -------------------------------------------------------------
@@ -1243,7 +1353,7 @@ func (m Model) navigate(to msg.Route) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.route = to
-	return m, nil
+	return m, m.windowTitle()
 }
 
 func (m Model) refresh() (tea.Model, tea.Cmd) {
@@ -1519,6 +1629,9 @@ func (m Model) renderStatus() string {
 		Title:    m.route.String(),
 		Watching: m.watching,
 		Pro:      m.provider.IsPro(),
+	}
+	if m.busy > 0 {
+		bar.Busy = m.spinner.View() + " " + m.busyLabel
 	}
 	if active, ok := m.views[m.route]; ok {
 		bar.Title = active.Title()

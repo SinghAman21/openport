@@ -24,6 +24,7 @@ type KeyMap struct {
 	Menu    key.Binding
 	Refresh key.Binding
 	Debug   key.Binding
+	Suspend key.Binding
 
 	// Direct view jumps.
 	GotoPorts      key.Binding
@@ -94,6 +95,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+d"),
 			key.WithHelp("ctrl+d", "dump state"),
 		),
+		Suspend: key.NewBinding(
+			key.WithKeys("ctrl+z"),
+			key.WithHelp("ctrl+z", "suspend"),
+		),
 		GotoPorts:      key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "ports")),
 		GotoActions:    key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "actions")),
 		GotoAliases:    key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "aliases")),
@@ -114,7 +119,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.Top, k.Bottom},
 		{k.Enter, k.Back, k.Refresh, k.Quit},
-		{k.Palette, k.Menu, k.Help, k.Debug},
+		{k.Palette, k.Menu, k.Help, k.Debug, k.Suspend},
 		{k.GotoPorts, k.GotoActions, k.GotoAliases, k.GotoBlueprints},
 		{k.GotoConfig, k.GotoHistory, k.GotoWorkspace},
 	}

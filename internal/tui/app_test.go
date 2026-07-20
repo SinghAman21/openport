@@ -1019,3 +1019,156 @@ func TestDetailPaneToggles(t *testing.T) {
 		t.Error("tab should bring the detail pane back")
 	}
 }
+
+// --- feedback for work in flight -----------------------------------------
+
+// TestSpinnerReportsWorkInFlight covers the gap that made slow actions feel
+// broken: suggesting a free port can bind hundreds of sockets, and with no
+// acknowledgement that reads as a hang.
+func TestSpinnerReportsWorkInFlight(t *testing.T) {
+	tests := []struct {
+		name  string
+		start tea.Msg
+		done  tea.Msg
+		label string
+	}{
+		{"suggest", msg.SuggestPortMsg{Near: 3000, Count: 1}, msg.SuggestedMsg{Ports: []int{4000}}, "free port"},
+		{"health", msg.HealthCheckMsg{Port: 3000}, msg.HealthResultMsg{Port: 3000}, "health"},
+		{"apply", msg.ApplyBlueprintMsg{Name: "web"}, msg.BlueprintAppliedMsg{Name: "web"}, "applying"},
+		{"list", msg.ListPortsMsg{}, msg.PortsLoadedMsg{}, "reading ports"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t, nil)
+			// Drain the busy state the initial load starts with.
+			h.send(msg.PortsLoadedMsg{Ports: samplePorts()})
+
+			// Step the model directly: the pump would run the command to
+			// completion and the in-flight window would never be observable.
+			updated, _ := h.model.Update(tt.start)
+			m := updated.(Model)
+
+			if m.busy == 0 {
+				t.Fatal("no work recorded as in flight")
+			}
+			if frame := ansi.Strip(m.View()); !strings.Contains(frame, tt.label) {
+				t.Errorf("status bar does not say what is happening; want %q in:\n%s",
+					tt.label, lastLine(frame))
+			}
+
+			done, _ := m.Update(tt.done)
+			if got := done.(Model).busy; got != 0 {
+				t.Errorf("busy count = %d after the result arrived; want 0", got)
+			}
+		})
+	}
+}
+
+// TestOverlappingWorkSharesOneSpinner checks the count, not a flag: a group
+// health check fans out one probe per port and they finish independently.
+func TestOverlappingWorkSharesOneSpinner(t *testing.T) {
+	h := newHarness(t, nil)
+	h.send(msg.PortsLoadedMsg{Ports: samplePorts()})
+
+	m := h.model
+	for _, port := range []int{3000, 5432, 6379} {
+		updated, _ := m.Update(msg.HealthCheckMsg{Port: port})
+		m = updated.(Model)
+	}
+	if m.busy != 3 {
+		t.Fatalf("busy = %d; want 3 probes in flight", m.busy)
+	}
+
+	for _, port := range []int{3000, 5432} {
+		updated, _ := m.Update(msg.HealthResultMsg{Port: port})
+		m = updated.(Model)
+	}
+	if m.busy != 1 {
+		t.Errorf("busy = %d after two of three finished; want 1", m.busy)
+	}
+
+	updated, _ := m.Update(msg.HealthResultMsg{Port: 6379})
+	if got := updated.(Model).busy; got != 0 {
+		t.Errorf("busy = %d after all finished; want 0", got)
+	}
+}
+
+// --- mouse ---------------------------------------------------------------
+
+// TestWheelScrollsTheSelection pins that asking the terminal for mouse events
+// buys the user something. The program takes over selection behaviour either
+// way; doing nothing with the events is the worst of both.
+func TestWheelScrollsTheSelection(t *testing.T) {
+	h := newHarness(t, nil)
+
+	first, ok := h.model.portsView.Selection()
+	if !ok {
+		t.Fatal("no initial selection")
+	}
+
+	h.send(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	afterDown, _ := h.model.portsView.Selection()
+	if afterDown.Port == first.Port {
+		t.Fatalf("wheel down did not move the selection off port %d", first.Port)
+	}
+
+	h.send(tea.MouseMsg{Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	afterUp, _ := h.model.portsView.Selection()
+	if afterUp.Port != first.Port {
+		t.Errorf("wheel up returned to port %d; want %d", afterUp.Port, first.Port)
+	}
+}
+
+func TestWheelScrollsTheMenuNotThePortsTable(t *testing.T) {
+	h := newHarness(t, nil)
+	h.sendKey("2")
+
+	before, _ := h.model.actionsView.Current()
+	h.send(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	after, _ := h.model.actionsView.Current()
+
+	if before.ID == after.ID {
+		t.Error("wheel down did not move the actions menu cursor")
+	}
+}
+
+// --- suspend -------------------------------------------------------------
+
+func TestCtrlZSuspends(t *testing.T) {
+	h := newHarness(t, nil)
+
+	updated, cmd := h.model.Update(tea.KeyMsg{Type: tea.KeyCtrlZ})
+	h.model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("ctrl+z produced no command")
+	}
+	if _, ok := cmd().(tea.SuspendMsg); !ok {
+		t.Error("ctrl+z should suspend the program")
+	}
+	if h.model.quit {
+		t.Error("suspending is not quitting")
+	}
+}
+
+// TestResumeRefreshes checks the listing is reloaded on return, since whatever
+// was on screen is as old as the time spent in the shell.
+func TestResumeRefreshes(t *testing.T) {
+	h := newHarness(t, nil)
+	updated, cmd := h.model.Update(tea.ResumeMsg{})
+	h.model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("resuming should refresh; got no command")
+	}
+}
+
+// lastLine returns the final non-empty line of a frame, which is the status bar.
+func lastLine(frame string) string {
+	lines := strings.Split(strings.TrimRight(frame, "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			return lines[i]
+		}
+	}
+	return ""
+}

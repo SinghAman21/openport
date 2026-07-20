@@ -1,0 +1,14 @@
+# Build artefacts
+/openport
+/dist/
+
+# Debug output (written by --debug and ctrl+d)
+openport-debug.log
+
+# Isolated state for `make dev`
+/.devstate/
+
+# Go
+*.test
+*.out
+coverage.*

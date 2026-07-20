@@ -36,9 +36,16 @@ var sortNames = map[sortColumn]string{
 	sortByState:   "state",
 }
 
-// detailPaneMinWidth is the terminal width below which the detail pane is
-// stacked under the table instead of beside it.
-const detailPaneMinWidth = 104
+// Layout thresholds for the detail pane.
+const (
+	// detailPaneMinWidth is the width at which the pane fits beside the table.
+	detailPaneMinWidth = 104
+	// stackedDetailMinHeight is the body height needed to stack it underneath
+	// instead; below this the table itself would be squeezed to nothing.
+	stackedDetailMinHeight = 16
+	// stackedDetailHeight is how many rows the stacked pane occupies.
+	stackedDetailHeight = 8
+)
 
 // PortsView is the home screen: the live table of listening ports plus a
 // detail pane for the selection.
@@ -56,6 +63,10 @@ type PortsView struct {
 
 	sortBy   sortColumn
 	sortDesc bool
+
+	// showDetail is toggled with tab, so the whole width can go to the table
+	// when the user wants it.
+	showDetail bool
 
 	// selectedKey survives refreshes: the cursor follows the process, not the
 	// row index, so a listing that reorders under watch mode does not move the
@@ -87,6 +98,7 @@ func NewPortsView(theme styles.Theme) *PortsView {
 		table:       t,
 		health:      map[int]*ports.HealthResult{},
 		filterInput: filter,
+		showDetail:  true,
 		loading:     true,
 	}
 }
@@ -232,7 +244,7 @@ func (v *PortsView) Title() string { return "Ports" }
 
 var portsKeys = struct {
 	kill, forceKill, killPID, check, health, alias, protect,
-	watch, filter, clearFilter, sort, sortRev, refresh, suggest key.Binding
+	watch, filter, clearFilter, sort, sortRev, refresh, suggest, detail key.Binding
 }{
 	kill:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "kill")),
 	forceKill:   key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "force kill")),
@@ -248,6 +260,7 @@ var portsKeys = struct {
 	sortRev:     key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "reverse")),
 	refresh:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 	suggest:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "free port")),
+	detail:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "detail pane")),
 }
 
 // Help implements View.
@@ -256,7 +269,7 @@ func (v *PortsView) Help() []key.Binding {
 		portsKeys.check, portsKeys.kill, portsKeys.forceKill, portsKeys.killPID,
 		portsKeys.health, portsKeys.alias, portsKeys.protect, portsKeys.watch,
 		portsKeys.filter, portsKeys.sort, portsKeys.sortRev, portsKeys.suggest,
-		portsKeys.refresh,
+		portsKeys.detail, portsKeys.refresh,
 	}
 }
 
@@ -392,6 +405,10 @@ func (v *PortsView) handleKey(keyMsg tea.KeyMsg) (View, tea.Cmd) {
 
 	case key.Matches(keyMsg, portsKeys.killPID):
 		return v, emit(msg.RunActionMsg{ID: "ports.kill_pid"})
+
+	case key.Matches(keyMsg, portsKeys.detail):
+		v.showDetail = !v.showDetail
+		return v, nil
 	}
 
 	// The rest need a selected row.
@@ -618,34 +635,55 @@ func (v *PortsView) View(width, height int) string {
 		bodyHeight = 3
 	}
 
-	sideBySide := width >= detailPaneMinWidth
+	// The detail pane carries things the table cannot: the full command line,
+	// the owning user, why a port is protected. Dropping it outright on a
+	// narrow terminal loses that information entirely, so it stacks under the
+	// table instead — and only disappears when there is genuinely no room,
+	// which the status bar hint then explains.
+	sideBySide := width >= detailPaneMinWidth && v.showDetail
+	stacked := !sideBySide && v.showDetail && bodyHeight >= stackedDetailMinHeight
+
 	tableWidth := width
+	tableHeight := bodyHeight
 	if sideBySide {
 		tableWidth = width * 62 / 100
+	}
+	if stacked {
+		tableHeight = bodyHeight - stackedDetailHeight
 	}
 
 	v.applyColumns(portColumns(tableWidth))
 	v.table.SetWidth(tableWidth)
-	v.table.SetHeight(bodyHeight)
+	v.table.SetHeight(tableHeight)
 
 	body := v.table.View()
 	if len(v.filtered) == 0 {
 		body = v.emptyState()
 	}
 
-	if !sideBySide {
+	switch {
+	case sideBySide:
+		detail := v.theme.Panel.
+			Width(width - tableWidth - 4).
+			Height(bodyHeight - 2).
+			Render(v.detailPane(width-tableWidth-8, bodyHeight-2))
+
+		return header + "\n" + lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.NewStyle().Width(tableWidth).Render(body),
+			detail,
+		)
+
+	case stacked:
+		detail := v.theme.Panel.
+			Width(width - 2).
+			Height(stackedDetailHeight - 2).
+			Render(v.detailPane(width-6, stackedDetailHeight-2))
+
+		return header + "\n" + body + "\n" + detail
+
+	default:
 		return header + "\n" + body
 	}
-
-	detail := v.theme.Panel.
-		Width(width - tableWidth - 4).
-		Height(bodyHeight - 2).
-		Render(v.detailPane(width - tableWidth - 8))
-
-	return header + "\n" + lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(tableWidth).Render(body),
-		detail,
-	)
 }
 
 // applyColumns installs a new column set, re-rendering the rows to match.
@@ -718,8 +756,9 @@ func (v *PortsView) headerLine(width int) string {
 	return left + strings.Repeat(" ", gap) + right
 }
 
-// detailPane renders everything known about the selected port.
-func (v *PortsView) detailPane(width int) string {
+// detailPane renders everything known about the selected port, trimmed to the
+// rows available.
+func (v *PortsView) detailPane(width, height int) string {
 	p, ok := v.Selection()
 	if !ok {
 		return v.theme.Faint.Render("No selection.")
@@ -769,7 +808,23 @@ func (v *PortsView) detailPane(width int) string {
 		b.WriteString(v.theme.Body.Render(wrapText(p.Command, width)) + "\n")
 	}
 
-	return strings.TrimRight(b.String(), "\n")
+	out := strings.TrimRight(b.String(), "\n")
+	if height > 0 {
+		out = clipToHeight(out, height)
+	}
+	return out
+}
+
+// clipToHeight trims a block to n rows, marking the cut.
+func clipToHeight(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) <= n {
+		return s
+	}
+	if n < 1 {
+		return ""
+	}
+	return strings.Join(append(lines[:n-1], "…"), "\n")
 }
 
 func orDash(s string) string {

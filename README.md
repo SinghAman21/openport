@@ -60,7 +60,15 @@ There are two ways to reach any capability, and they run the same code:
 - **`:` or `ctrl+k` — the command palette.** Fuzzy-search the same list.
 
 Anything needing input (a port number, an alias, a range) opens a form with
-inline validation. Anything destructive opens a confirmation.
+inline validation. Anything destructive opens a confirmation. **`esc` closes
+whatever is open**, always — the modal layer handles it before the content
+does, so no widget can leave you stranded in a popup.
+
+The layout degrades rather than disappearing. Narrow the window and the ports
+table sheds its least important columns, the detail pane moves underneath the
+table instead of vanishing, and the tab strip falls back to bare numbers so the
+navigation shortcuts stay visible. A list that cannot show everything says how
+much is above and below rather than quietly ending.
 
 ### Key bindings
 
@@ -72,7 +80,7 @@ Arrows and Vim keys work everywhere; neither is second-class.
 | `←`/`h`, `→`/`l` | previous / next tab |
 | `g`, `G` | top, bottom |
 | `enter` | select |
-| `esc` | close the top overlay, dismiss toasts, or go back |
+| `esc` | close any popup, dismiss toasts, or go back |
 | `q`, `ctrl+c` | quit |
 | `:`, `ctrl+k` | command palette |
 | `?` | help overlay (shows the active view's bindings too) |
@@ -94,6 +102,7 @@ In the Ports view:
 | `f` | suggest a free port |
 | `/` | filter by port, process, alias or group |
 | `s` / `S` | cycle sort column / reverse |
+| `tab` | show/hide the detail pane |
 
 ---
 

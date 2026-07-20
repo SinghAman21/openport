@@ -96,11 +96,19 @@ func (c *Confirm) resolve(answer bool) tea.Cmd {
 	}
 }
 
-// View renders the prompt and the two buttons.
-func (c *Confirm) View(width int) string {
+// Hint implements ModalContent.
+func (c *Confirm) Hint() string { return "y/n · ←/→ choose · enter accept" }
+
+// View renders the prompt and the two buttons. The buttons are the part that
+// must survive a short window, so the prompt is what gets trimmed.
+func (c *Confirm) View(width, height int) string {
 	var b strings.Builder
 	if c.body != "" {
-		b.WriteString(wrap(c.body, width))
+		body := wrap(c.body, width)
+		if budget := height - 2; budget > 0 {
+			body = clipLines(body, budget)
+		}
+		b.WriteString(body)
 		b.WriteString("\n\n")
 	}
 
@@ -118,9 +126,20 @@ func (c *Confirm) View(width int) string {
 			c.theme.Selected.Render("["+strings.TrimSpace(no)+"]"))
 	}
 
-	b.WriteString("\n\n")
-	b.WriteString(c.theme.Faint.Render("y/n · ←/→ to choose · enter to accept · esc to cancel"))
 	return b.String()
+}
+
+// clipLines trims a block to at most n lines, marking the cut so a truncated
+// prompt does not read as the whole prompt.
+func clipLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) <= n {
+		return s
+	}
+	if n < 1 {
+		return "…"
+	}
+	return strings.Join(append(lines[:n-1], "…"), "\n")
 }
 
 // wrap hard-wraps plain text to width, preserving explicit newlines.

@@ -1,6 +1,7 @@
 package components
 
 import (
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 
@@ -94,8 +95,19 @@ func NewForm(id, title string, fields []FormField) *Form {
 		}
 	}
 
+	// huh binds abort to ctrl+c and nothing else, which is unusable inside a
+	// modal: ctrl+c belongs to the application. Without esc here the popup has
+	// no exit at all — the root model also treats esc as close, but binding it
+	// on the form keeps huh's own footer honest about the way out.
+	keys := huh.NewDefaultKeyMap()
+	keys.Quit = key.NewBinding(
+		key.WithKeys("esc", "ctrl+c"),
+		key.WithHelp("esc", "cancel"),
+	)
+
 	f.form = huh.NewForm(huh.NewGroup(huhFields...)).
 		WithTheme(huh.ThemeCharm()).
+		WithKeyMap(keys).
 		WithShowHelp(true).
 		WithShowErrors(true)
 
@@ -156,8 +168,13 @@ func (f *Form) Update(message tea.Msg) (ModalContent, tea.Cmd) {
 	return f, cmd
 }
 
-// View renders the form body.
-func (f *Form) View(width int) string {
-	f.form = f.form.WithWidth(width)
+// Hint implements ModalContent.
+func (f *Form) Hint() string { return "tab next · enter submit" }
+
+// View renders the form body inside the space it is given. huh scrolls its own
+// group when the height is constrained, so a form with more fields than the
+// terminal has rows stays usable instead of spilling off the bottom.
+func (f *Form) View(width, height int) string {
+	f.form = f.form.WithWidth(width).WithHeight(max(height, 3))
 	return f.form.View()
 }

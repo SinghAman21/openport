@@ -2,12 +2,14 @@ package tui
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/SinghAman21/openport/internal/model"
 	"github.com/SinghAman21/openport/internal/platform"
@@ -775,3 +777,245 @@ func assertFits(t *testing.T, out string, width, height int, label func() string
 
 // lineWidth measures a rendered line in terminal cells, ignoring ANSI.
 func lineWidth(s string) int { return lipgloss.Width(s) }
+
+// --- every popup must be escapable ---------------------------------------
+
+// TestEveryPopupClosesWithEsc is the property that matters most for trusting
+// the interface: whatever you opened, one key gets you out. A popup you cannot
+// leave is worse than a missing feature, because it strands the user with no
+// obvious recovery short of killing the process.
+func TestEveryPopupClosesWithEsc(t *testing.T) {
+	for _, action := range actions.All() {
+		t.Run(action.ID, func(t *testing.T) {
+			var provider opsync.SyncProvider = opsync.NoopProvider{}
+			if action.Pro {
+				provider = proProvider{}
+			}
+			h := newHarness(t, provider)
+			h.send(msg.RunActionMsg{ID: action.ID})
+
+			if !h.hasModal() {
+				return // this action does not open a popup
+			}
+
+			h.sendKey("esc")
+			if h.hasModal() {
+				t.Fatalf("%s opened a popup that esc will not close", action.ID)
+			}
+		})
+	}
+}
+
+// TestPopupsCloseWithEscFromEveryView checks the escape hatch is a property of
+// the modal layer, not of whichever view happened to open it.
+func TestPopupsCloseWithEscFromEveryView(t *testing.T) {
+	routes := []msg.Route{
+		msg.RoutePorts, msg.RouteActions, msg.RouteAliases,
+		msg.RouteBlueprints, msg.RouteConfig, msg.RouteHistory, msg.RouteWorkspace,
+	}
+	for _, route := range routes {
+		h := newHarness(t, nil)
+		h.model.route = route
+		h.send(msg.RunActionMsg{ID: actions.PortsCheck})
+
+		if !h.hasModal() {
+			t.Fatalf("%v: no popup opened", route)
+		}
+		h.sendKey("esc")
+		if h.hasModal() {
+			t.Errorf("%v: esc did not close the popup", route)
+		}
+	}
+}
+
+// TestActionsViewEnterOpensAndEscapes walks the path the user described:
+// browse the actions menu, run an entry, then leave again.
+func TestActionsViewEnterOpensAndEscapes(t *testing.T) {
+	h := newHarness(t, nil)
+	h.sendKey("2")
+	if h.model.route != msg.RouteActions {
+		t.Fatal("2 should open the actions menu")
+	}
+
+	// Walk down the menu, running whatever is highlighted, and make sure each
+	// one either does something visible or opens an escapable popup.
+	for i := 0; i < 12; i++ {
+		item, ok := h.model.actionsView.Current()
+		if !ok {
+			h.sendKey("j")
+			continue
+		}
+
+		h.sendKey("enter")
+		if h.hasModal() {
+			h.sendKey("esc")
+			if h.hasModal() {
+				t.Fatalf("%q opened a popup that esc will not close", item.ID)
+			}
+		}
+
+		// Return to the menu for the next iteration.
+		h.model.route = msg.RouteActions
+		h.sendKey("j")
+	}
+}
+
+// --- popups must fit on screen -------------------------------------------
+
+// TestPopupsFitTheTerminal guards the other half of the complaint: a popup
+// taller than the window loses its own footer, which is where the keys that
+// dismiss it are documented.
+func TestPopupsFitTheTerminal(t *testing.T) {
+	sizes := []struct{ w, h int }{{140, 40}, {100, 30}, {80, 24}, {60, 18}, {50, 12}}
+	openers := map[string]string{
+		"check form":     actions.PortsCheck,
+		"kill form":      actions.PortsKill,
+		"range form":     actions.PortsKillRange,
+		"alias form":     actions.AliasNew,
+		"blueprint form": actions.BlueprintNew,
+		"config form":    actions.ConfigInit,
+		"help overlay":   actions.UIHelp,
+	}
+
+	for name, id := range openers {
+		for _, size := range sizes {
+			h := newHarness(t, nil)
+			h.send(tea.WindowSizeMsg{Width: size.w, Height: size.h})
+			h.send(msg.RunActionMsg{ID: id})
+			if !h.hasModal() {
+				continue
+			}
+
+			block := h.model.modal.View(size.w, size.h)
+			if got := lipgloss.Height(block); got > size.h {
+				t.Errorf("%s at %dx%d: popup is %d rows tall, taller than the window",
+					name, size.w, size.h, got)
+			}
+			if got := lipgloss.Width(block); got > size.w {
+				t.Errorf("%s at %dx%d: popup is %d cells wide, wider than the window",
+					name, size.w, size.h, got)
+			}
+		}
+	}
+}
+
+// --- responsiveness: degrade, do not disappear ---------------------------
+
+// TestHeaderKeepsNavigationDiscoverable checks the tab strip degrades to
+// numbers rather than collapsing to the active view. The strip is the only
+// place the other screens and their shortcuts are advertised, so dropping it
+// hides the navigation from anyone who has not memorised it.
+func TestHeaderKeepsNavigationDiscoverable(t *testing.T) {
+	for _, width := range []int{200, 140, 120, 100, 90, 80, 70, 60, 50, 40} {
+		h := newHarness(t, nil)
+		h.send(tea.WindowSizeMsg{Width: width, Height: 30})
+
+		header := h.model.renderHeader()
+		if got := lipgloss.Width(header); got > width {
+			t.Errorf("width %d: header is %d cells wide", width, got)
+		}
+
+		// Every route's number should still be reachable knowledge.
+		plain := ansi.Strip(header)
+		for i := range msg.AllRoutes {
+			if !strings.Contains(plain, strconv.Itoa(i+1)) {
+				t.Errorf("width %d: header %q hides the shortcut for route %d",
+					width, plain, i+1)
+				break
+			}
+		}
+		// And it should always say where we are.
+		if !strings.Contains(plain, h.model.route.String()) {
+			t.Errorf("width %d: header %q does not name the active view", width, plain)
+		}
+	}
+}
+
+// TestOverflowingMenuSaysSo guards against the failure the user hit: a menu
+// showing a handful of its entries with no sign the rest exist.
+func TestOverflowingMenuSaysSo(t *testing.T) {
+	for _, height := range []int{30, 24, 20, 16, 12} {
+		h := newHarness(t, nil)
+		h.send(tea.WindowSizeMsg{Width: 100, Height: height})
+		h.sendKey("2")
+
+		frame := ansi.Strip(h.model.View())
+		total := len(actions.All())
+		shown := 0
+		for _, a := range actions.All() {
+			if strings.Contains(frame, a.Title) {
+				shown++
+			}
+		}
+		if shown >= total {
+			continue // everything fits; no indicator needed
+		}
+		if !strings.Contains(frame, "below") && !strings.Contains(frame, "above") {
+			t.Errorf("height %d: menu shows %d of %d actions with no scroll indicator:\n%s",
+				height, shown, total, frame)
+		}
+	}
+}
+
+// TestMenuScrollsToEveryEntry checks the whole catalog stays reachable on a
+// short terminal — an indicator is only honest if the content it points at can
+// actually be scrolled to.
+func TestMenuScrollsToEveryEntry(t *testing.T) {
+	h := newHarness(t, nil)
+	h.send(tea.WindowSizeMsg{Width: 100, Height: 14})
+	h.sendKey("2")
+
+	seen := map[string]bool{}
+	for i := 0; i < len(actions.All())+10; i++ {
+		frame := ansi.Strip(h.model.View())
+		for _, a := range actions.All() {
+			if strings.Contains(frame, a.Title) {
+				seen[a.ID] = true
+			}
+		}
+		h.sendKey("j")
+	}
+
+	for _, a := range actions.All() {
+		if !seen[a.ID] {
+			t.Errorf("%q never became visible while scrolling", a.Title)
+		}
+	}
+}
+
+// TestDetailPaneStacksRatherThanVanishing pins that narrowing the terminal
+// moves the detail pane instead of discarding the only place the full command
+// line and protection reason are shown.
+func TestDetailPaneStacksRatherThanVanishing(t *testing.T) {
+	// Wide: beside the table. Narrow but tall: underneath. Both must show it.
+	for _, size := range []struct{ w, h int }{{140, 40}, {80, 30}, {70, 24}} {
+		h := newHarness(t, nil)
+		h.send(tea.WindowSizeMsg{Width: size.w, Height: size.h})
+		h.selectPort(22) // the protected row, which has a reason to show
+
+		frame := ansi.Strip(h.model.View())
+		if !strings.Contains(frame, "sshd") {
+			t.Errorf("%dx%d: detail pane is missing the selection:\n%s", size.w, size.h, frame)
+		}
+	}
+}
+
+// TestDetailPaneToggles checks the user can reclaim the space when they want
+// the table instead.
+func TestDetailPaneToggles(t *testing.T) {
+	h := newHarness(t, nil)
+	h.send(tea.WindowSizeMsg{Width: 140, Height: 40})
+	h.selectPort(22)
+
+	if !strings.Contains(ansi.Strip(h.model.View()), "Protocol") {
+		t.Fatal("detail pane should be shown by default")
+	}
+	h.sendKey("tab")
+	if strings.Contains(ansi.Strip(h.model.View()), "Protocol") {
+		t.Error("tab should hide the detail pane")
+	}
+	h.sendKey("tab")
+	if !strings.Contains(ansi.Strip(h.model.View()), "Protocol") {
+		t.Error("tab should bring the detail pane back")
+	}
+}

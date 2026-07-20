@@ -100,3 +100,7 @@ func (v *ActionsView) Update(message tea.Msg) (View, tea.Cmd) {
 func (v *ActionsView) View(width, height int) string {
 	return v.menu.View(width, height)
 }
+
+// Current exposes the highlighted entry, for the status bar and for tests
+// that walk the menu.
+func (v *ActionsView) Current() (components.Item, bool) { return v.menu.Current() }

@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/SinghAman21/openport/internal/model"
 	"github.com/SinghAman21/openport/internal/ports"
@@ -149,6 +150,15 @@ func (m Model) handleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.modal != nil {
+		// Esc closes the top overlay, whatever it contains, before the content
+		// gets a look. Content cannot opt out of this: a popup with no exit
+		// strands the user with nothing to try but killing the process, and
+		// relying on each widget to implement its own escape is exactly how
+		// that happens — huh, for one, binds abort to ctrl+c and nothing else.
+		if keyMsg.Type == tea.KeyEsc {
+			m.modal = nil
+			return m, nil
+		}
 		modal, cmd := m.modal.Update(keyMsg)
 		m.modal = modal
 		return m, cmd
@@ -1440,28 +1450,68 @@ func (m Model) View() string {
 
 // renderHeader draws the brand plus the route tabs, which double as the
 // numeric shortcuts.
+//
+// It degrades in tiers rather than collapsing straight to the active view.
+// The strip is the only place the other screens and their number keys are
+// advertised, so dropping it entirely on a narrow terminal does not just look
+// worse — it hides the navigation from anyone who has not memorised it.
 func (m Model) renderHeader() string {
-	brand := m.theme.Header.Render("openport")
+	for _, candidate := range []string{
+		m.headerTabs(true, true),   // brand + full labels
+		m.headerTabs(false, true),  // full labels
+		m.headerTabs(false, false), // numbers, with the active one named
+	} {
+		if lipgloss.Width(candidate) <= m.width {
+			return candidate
+		}
+	}
+	// Nothing fits: at least say where we are.
+	return truncateLine(m.theme.TabActive.Render(m.route.String()), m.width)
+}
 
-	tabs := make([]string, 0, len(msg.AllRoutes))
+// headerTabs builds one tier of the strip.
+func (m Model) headerTabs(brand, labels bool) string {
+	tab := m.theme.Tab
+	active := m.theme.TabActive
+	if !labels {
+		// Reclaim the per-tab padding when only numbers are shown.
+		tab = tab.Padding(0, 1)
+		active = active.Padding(0, 1)
+	}
+
+	parts := make([]string, 0, len(msg.AllRoutes)+1)
+	if brand {
+		parts = append(parts, m.theme.Header.Render("openport"))
+	}
+
 	for i, route := range msg.AllRoutes {
-		label := fmt.Sprintf("%d %s", i+1, route)
-		if route == msg.RouteWorkspace && !m.provider.IsPro() {
+		number := strconv.Itoa(i + 1)
+
+		// The active tab keeps its name at every tier, so the strip always
+		// answers "where am I" as well as "where can I go".
+		label := number
+		if labels || route == m.route {
+			label = number + " " + route.String()
+		}
+		if labels && route == msg.RouteWorkspace && !m.provider.IsPro() {
 			label += " ᴾᴿᴼ"
 		}
+
 		if route == m.route {
-			tabs = append(tabs, m.theme.TabActive.Render(label))
+			parts = append(parts, active.Render(label))
 			continue
 		}
-		tabs = append(tabs, m.theme.Tab.Render(label))
+		parts = append(parts, tab.Render(label))
 	}
+	return strings.Join(parts, "")
+}
 
-	line := brand + strings.Join(tabs, "")
-	if lipgloss.Width(line) > m.width {
-		// Too narrow for the full strip: show just where we are.
-		line = brand + m.theme.TabActive.Render(m.route.String())
+// truncateLine clips a styled line to width without severing escape sequences.
+func truncateLine(s string, width int) string {
+	if width <= 0 || lipgloss.Width(s) <= width {
+		return s
 	}
-	return line
+	return ansi.Truncate(s, width, "")
 }
 
 func (m Model) renderStatus() string {

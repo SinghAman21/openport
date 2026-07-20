@@ -20,9 +20,15 @@ type HelpSection struct {
 // Help is the '?' overlay. It is built from the global keymap plus whatever
 // the active view reports from its Help() method, so the overlay is always
 // accurate for wherever the user currently is.
+//
+// It scrolls: the full keymap runs to about forty rows, which does not fit an
+// 80x24 terminal, and silently clipping the bottom would hide bindings the
+// overlay exists to teach.
 type Help struct {
 	sections []HelpSection
 	theme    styles.Theme
+	offset   int
+	overflow bool
 }
 
 // NewHelp builds the overlay.
@@ -36,54 +42,95 @@ func (h *Help) Title() string { return "Keyboard shortcuts" }
 // Danger implements ModalContent.
 func (h *Help) Danger() bool { return false }
 
-var helpKeys = key.NewBinding(key.WithKeys("esc", "?", "q"))
+// Hint implements ModalContent, advertising the scroll keys only when there is
+// something below the fold.
+func (h *Help) Hint() string {
+	if h.overflow {
+		return "↑/↓ scroll"
+	}
+	return ""
+}
 
-// Update closes the overlay on esc, '?' or q.
+var helpKeys = struct{ up, down, close key.Binding }{
+	up:    key.NewBinding(key.WithKeys("up", "k", "pgup")),
+	down:  key.NewBinding(key.WithKeys("down", "j", "pgdown", " ")),
+	close: key.NewBinding(key.WithKeys("esc", "?", "q")),
+}
+
+// Update scrolls, or closes the overlay.
 func (h *Help) Update(message tea.Msg) (ModalContent, tea.Cmd) {
-	if keyMsg, ok := message.(tea.KeyMsg); ok && key.Matches(keyMsg, helpKeys) {
+	keyMsg, ok := message.(tea.KeyMsg)
+	if !ok {
+		return h, nil
+	}
+	switch {
+	case key.Matches(keyMsg, helpKeys.close):
 		return h, func() tea.Msg { return msg.CloseOverlayMsg{} }
+	case key.Matches(keyMsg, helpKeys.up):
+		if h.offset > 0 {
+			h.offset--
+		}
+	case key.Matches(keyMsg, helpKeys.down):
+		h.offset++
 	}
 	return h, nil
 }
 
-// View renders the sections in two columns where there is room.
-func (h *Help) View(width int) string {
-	var blocks []string
+// View renders as many bindings as fit, scrolled to the current offset.
+func (h *Help) View(width, height int) string {
+	lines := h.lines(width)
+
+	if height < 1 {
+		height = 1
+	}
+	h.overflow = len(lines) > height
+
+	// Clamp the offset so scrolling cannot run past the end and leave the
+	// overlay looking empty.
+	maxOffset := len(lines) - height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if h.offset > maxOffset {
+		h.offset = maxOffset
+	}
+
+	end := min(h.offset+height, len(lines))
+	visible := lines[h.offset:end]
+
+	// Pad so the footer stays pinned rather than jumping as you scroll.
+	for len(visible) < height {
+		visible = append(visible, "")
+	}
+	return strings.Join(visible, "\n")
+}
+
+// lines flattens the sections into individually renderable rows, which is what
+// makes scrolling by row possible.
+func (h *Help) lines(width int) []string {
+	var out []string
 	for _, s := range h.sections {
 		if len(s.Bindings) == 0 {
 			continue
 		}
-		var b strings.Builder
-		b.WriteString(h.theme.Subtitle.Render(strings.ToUpper(s.Title)))
-		b.WriteString("\n")
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, h.theme.Subtitle.Render(strings.ToUpper(s.Title)))
+
 		for _, bind := range s.Bindings {
 			help := bind.Help()
 			if help.Key == "" {
 				continue
 			}
-			b.WriteString(h.theme.StatusKey.Render(pad(help.Key, 10)))
-			b.WriteString(h.theme.Body.Render(help.Desc))
-			b.WriteString("\n")
+			row := h.theme.StatusKey.Render(pad(help.Key, 12)) + h.theme.Body.Render(help.Desc)
+			out = append(out, truncate(row, width))
 		}
-		blocks = append(blocks, strings.TrimRight(b.String(), "\n"))
 	}
-
-	if len(blocks) == 0 {
-		return h.theme.Faint.Render("No bindings.")
+	if len(out) == 0 {
+		return []string{h.theme.Faint.Render("No bindings.")}
 	}
-
-	// Two columns when the modal is wide enough, otherwise stack.
-	if width >= 56 && len(blocks) > 1 {
-		mid := (len(blocks) + 1) / 2
-		left := lipgloss.JoinVertical(lipgloss.Left, blocks[:mid]...)
-		right := lipgloss.JoinVertical(lipgloss.Left, blocks[mid:]...)
-		colWidth := width/2 - 1
-		return lipgloss.JoinHorizontal(lipgloss.Top,
-			lipgloss.NewStyle().Width(colWidth).Render(left),
-			lipgloss.NewStyle().Width(colWidth).Render(right),
-		)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, blocks...)
+	return out
 }
 
 // pad right-pads s to n display cells.

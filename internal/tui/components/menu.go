@@ -19,12 +19,9 @@ type Menu struct {
 	offset int
 }
 
-// NewMenu builds a menu over items, placing the cursor on the first selectable
-// entry.
+// NewMenu builds a menu over items.
 func NewMenu(theme styles.Theme, items []Item) *Menu {
-	m := &Menu{items: items, theme: theme}
-	m.cursor = m.nextSelectable(-1, 1)
-	return m
+	return &Menu{items: items, theme: theme}
 }
 
 // SetItems replaces the contents, keeping the cursor in range.
@@ -33,8 +30,8 @@ func (m *Menu) SetItems(items []Item) {
 	if m.cursor >= len(items) {
 		m.cursor = len(items) - 1
 	}
-	if m.cursor < 0 || (m.cursor < len(items) && items[m.cursor].Disabled) {
-		m.cursor = m.nextSelectable(-1, 1)
+	if m.cursor < 0 {
+		m.cursor = 0
 	}
 }
 
@@ -72,65 +69,116 @@ func (m *Menu) Update(message tea.Msg) (*Menu, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+	// The cursor moves over disabled entries rather than skipping them. Off
+	// Pro those sit at the end of the catalog, and skipping meant the cursor
+	// stopped short of them — so on a short terminal the list never scrolled
+	// far enough to show they existed at all. They are still not runnable;
+	// Current reports that separately, and the caller explains why.
 	switch {
 	case key.Matches(keyMsg, menuKeys.up):
-		m.cursor = m.nextSelectable(m.cursor, -1)
+		m.cursor--
 	case key.Matches(keyMsg, menuKeys.down):
-		m.cursor = m.nextSelectable(m.cursor, 1)
+		m.cursor++
 	case key.Matches(keyMsg, menuKeys.top):
-		m.cursor = m.nextSelectable(-1, 1)
+		m.cursor = 0
 	case key.Matches(keyMsg, menuKeys.bottom):
-		m.cursor = m.nextSelectable(len(m.items), -1)
+		m.cursor = len(m.items) - 1
+	}
+
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.items) {
+		m.cursor = len(m.items) - 1
 	}
 	return m, nil
 }
 
-// nextSelectable walks from idx in the given direction to the next enabled
-// item, stopping at the ends rather than wrapping.
-func (m *Menu) nextSelectable(idx, dir int) int {
-	for i := idx + dir; i >= 0 && i < len(m.items); i += dir {
-		if !m.items[i].Disabled {
-			return i
-		}
-	}
-	if idx >= 0 && idx < len(m.items) && !m.items[idx].Disabled {
-		return idx // no move possible; stay put
-	}
-	// Fall back to the first selectable item anywhere in the list.
-	for i := range m.items {
-		if !m.items[i].Disabled {
-			return i
-		}
-	}
-	return -1
-}
-
 // View renders the menu, scrolling to keep the cursor visible.
+//
+// Rows are flattened first — group headers included — so scrolling is exact.
+// Computing the window against item indices while rendering extra header rows
+// is what makes a menu drift out of step with its own cursor and appear to
+// swallow entries.
 func (m *Menu) View(width, height int) string {
 	if len(m.items) == 0 {
 		return m.theme.Faint.Render("Nothing here yet.")
 	}
-	m.scrollTo(height)
-
-	var b strings.Builder
-	lastGroup := ""
-	rendered := 0
-
-	for i := m.offset; i < len(m.items) && rendered < height; i++ {
-		it := m.items[i]
-		if it.Group != "" && it.Group != lastGroup {
-			if rendered > 0 {
-				b.WriteString("\n")
-				rendered++
-			}
-			b.WriteString(m.theme.Subtitle.Render(strings.ToUpper(it.Group)) + "\n")
-			lastGroup = it.Group
-			rendered++
-		}
-		b.WriteString(m.renderRow(it, i == m.cursor, width) + "\n")
-		rendered++
+	if height < 1 {
+		height = 1
 	}
-	return strings.TrimRight(b.String(), "\n")
+
+	lines, cursorLine := m.render(width)
+
+	// When the list overflows, spend a row saying so. A menu that silently
+	// shows six of forty entries reads as a menu with six entries.
+	overflow := len(lines) > height
+	visible := height
+	if overflow {
+		visible = height - 1
+	}
+	if visible < 1 {
+		visible = 1
+	}
+
+	if cursorLine < m.offset {
+		m.offset = cursorLine
+	}
+	if cursorLine >= m.offset+visible {
+		m.offset = cursorLine - visible + 1
+	}
+	if maxOffset := len(lines) - visible; m.offset > maxOffset {
+		m.offset = maxOffset
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
+
+	end := min(m.offset+visible, len(lines))
+	out := append([]string(nil), lines[m.offset:end]...)
+
+	if overflow {
+		out = append(out, m.scrollIndicator(len(lines), visible))
+	}
+	return strings.Join(out, "\n")
+}
+
+// render flattens items and headers into rows, reporting which row the cursor
+// is on.
+func (m *Menu) render(width int) (lines []string, cursorLine int) {
+	lastGroup := ""
+	for i, it := range m.items {
+		if it.Group != "" && it.Group != lastGroup {
+			if len(lines) > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, m.theme.Subtitle.Render(strings.ToUpper(it.Group)))
+			lastGroup = it.Group
+		}
+		if i == m.cursor {
+			cursorLine = len(lines)
+		}
+		lines = append(lines, m.renderRow(it, i == m.cursor, width))
+	}
+	return lines, cursorLine
+}
+
+// scrollIndicator reports what is out of view in both directions.
+func (m *Menu) scrollIndicator(total, visible int) string {
+	above := m.offset
+	below := total - m.offset - visible
+	if below < 0 {
+		below = 0
+	}
+
+	var parts []string
+	if above > 0 {
+		parts = append(parts, "↑ "+itoa(above)+" above")
+	}
+	if below > 0 {
+		parts = append(parts, "↓ "+itoa(below)+" below")
+	}
+	return m.theme.Faint.Render(strings.Join(parts, "   "))
 }
 
 func (m *Menu) renderRow(it Item, selected bool, width int) string {
@@ -164,23 +212,6 @@ func (m *Menu) renderRow(it Item, selected bool, width int) string {
 		return truncate(left, width)
 	}
 	return left + strings.Repeat(" ", gap) + hint
-}
-
-// scrollTo keeps the cursor inside the visible window.
-func (m *Menu) scrollTo(height int) {
-	if height <= 0 {
-		return
-	}
-	if m.cursor < m.offset {
-		m.offset = m.cursor
-	}
-	// Group headers consume rows too, so leave a little slack.
-	if m.cursor >= m.offset+height-2 {
-		m.offset = m.cursor - height + 3
-	}
-	if m.offset < 0 {
-		m.offset = 0
-	}
 }
 
 // truncate clips a styled string to width, appending an ellipsis when it does

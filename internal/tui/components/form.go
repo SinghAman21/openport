@@ -8,6 +8,20 @@ import (
 	"github.com/SinghAman21/openport/internal/tui/msg"
 )
 
+// escapableKeyMap is huh's default bindings with esc added to abort.
+//
+// huh binds abort to ctrl+c and nothing else, which is unusable inside a
+// modal: ctrl+c belongs to the application. The root model also treats esc as
+// close, but binding it here keeps huh's own footer honest about the way out.
+func escapableKeyMap() *huh.KeyMap {
+	keys := huh.NewDefaultKeyMap()
+	keys.Quit = key.NewBinding(
+		key.WithKeys("esc", "ctrl+c"),
+		key.WithHelp("esc", "cancel"),
+	)
+	return keys
+}
+
 // FieldKind selects the input widget for a form field.
 type FieldKind int
 
@@ -95,19 +109,9 @@ func NewForm(id, title string, fields []FormField) *Form {
 		}
 	}
 
-	// huh binds abort to ctrl+c and nothing else, which is unusable inside a
-	// modal: ctrl+c belongs to the application. Without esc here the popup has
-	// no exit at all — the root model also treats esc as close, but binding it
-	// on the form keeps huh's own footer honest about the way out.
-	keys := huh.NewDefaultKeyMap()
-	keys.Quit = key.NewBinding(
-		key.WithKeys("esc", "ctrl+c"),
-		key.WithHelp("esc", "cancel"),
-	)
-
 	f.form = huh.NewForm(huh.NewGroup(huhFields...)).
 		WithTheme(huh.ThemeCharm()).
-		WithKeyMap(keys).
+		WithKeyMap(escapableKeyMap()).
 		WithShowHelp(true).
 		WithShowErrors(true)
 
@@ -168,8 +172,8 @@ func (f *Form) Update(message tea.Msg) (ModalContent, tea.Cmd) {
 	return f, cmd
 }
 
-// Hint implements ModalContent.
-func (f *Form) Hint() string { return "tab next · enter submit" }
+// Hint implements ModalContent; huh renders its own key help.
+func (f *Form) Hint() string { return "" }
 
 // View renders the form body inside the space it is given. huh scrolls its own
 // group when the height is constrained, so a form with more fields than the

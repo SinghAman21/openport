@@ -932,15 +932,18 @@ func TestHeaderKeepsNavigationDiscoverable(t *testing.T) {
 }
 
 // TestOverflowingMenuSaysSo guards against the failure the user hit: a menu
-// showing a handful of its entries with no sign the rest exist.
+// showing a handful of its entries with no sign the rest exist. bubbles/list
+// answers this with its item counter and pagination, so that is what is
+// asserted — the requirement is that the user can tell, not how.
 func TestOverflowingMenuSaysSo(t *testing.T) {
+	total := len(actions.All())
+
 	for _, height := range []int{30, 24, 20, 16, 12} {
 		h := newHarness(t, nil)
 		h.send(tea.WindowSizeMsg{Width: 100, Height: height})
 		h.sendKey("2")
 
 		frame := ansi.Strip(h.model.View())
-		total := len(actions.All())
 		shown := 0
 		for _, a := range actions.All() {
 			if strings.Contains(frame, a.Title) {
@@ -948,10 +951,10 @@ func TestOverflowingMenuSaysSo(t *testing.T) {
 			}
 		}
 		if shown >= total {
-			continue // everything fits; no indicator needed
+			continue // everything fits; nothing to advertise
 		}
-		if !strings.Contains(frame, "below") && !strings.Contains(frame, "above") {
-			t.Errorf("height %d: menu shows %d of %d actions with no scroll indicator:\n%s",
+		if !strings.Contains(frame, strconv.Itoa(total)) {
+			t.Errorf("height %d: menu shows %d of %d actions without stating the total:\n%s",
 				height, shown, total, frame)
 		}
 	}

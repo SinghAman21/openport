@@ -3,14 +3,18 @@ package components
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/SinghAman21/openport/internal/tui/styles"
 )
 
-// StatusBar is the bottom line: where you are, what is selected, what you can
-// press, and whether watch mode is live.
+// StatusBar is the bottom line: where you are, what is selected, what is in
+// flight, and what you can press.
+//
+// The key hints come from bubbles/help in its short form, which already knows
+// how to fit a binding list into a given width and elide the rest.
 type StatusBar struct {
 	// Title is the active view's name.
 	Title string
@@ -47,13 +51,9 @@ func (s StatusBar) View(theme styles.Theme, width int) string {
 		left += "  " + s.Busy
 	}
 
-	// The hints get whatever room is left after the left half. A view can
-	// report a dozen bindings; showing the first few that fit beats showing
-	// none, which is what a plain "does it all fit?" check would do.
-	budget := width - lipgloss.Width(left) - 3
 	right := s.Message
 	if right == "" {
-		right = renderHints(theme, s.Hints, budget)
+		right = renderHints(s.Hints, width-lipgloss.Width(left)-3)
 	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right) - 2
@@ -63,40 +63,29 @@ func (s StatusBar) View(theme styles.Theme, width int) string {
 	return theme.StatusBar.Render(left + strings.Repeat(" ", gap) + right)
 }
 
-// renderHints formats bindings as "key desc" pairs separated by dots, adding
-// them only while they fit inside budget.
-func renderHints(theme styles.Theme, hints []key.Binding, budget int) string {
-	if budget < 6 {
+// renderHints defers to bubbles/help for the "key desc · key desc" line, which
+// already knows how to fit bindings into a budget and drop the overflow.
+func renderHints(hints []key.Binding, budget int) string {
+	if budget < 6 || len(hints) == 0 {
 		return ""
 	}
-	separator := theme.StatusHint.Render(" · ")
-	sepWidth := lipgloss.Width(separator)
+	h := help.New()
+	h.Width = budget
+	h.Styles.ShortKey = h.Styles.ShortKey.Foreground(styles.Accent).Bold(true)
+	h.Styles.ShortDesc = h.Styles.ShortDesc.Foreground(styles.Subtle)
+	h.Styles.ShortSeparator = h.Styles.ShortSeparator.Foreground(styles.Subtle)
+	return h.ShortHelpView(hints)
+}
 
-	var out string
-	used := 0
-	for _, h := range hints {
-		if !h.Enabled() {
-			continue
-		}
-		help := h.Help()
-		if help.Key == "" {
-			continue
-		}
-		part := theme.StatusKey.Render(help.Key) + " " + theme.StatusHint.Render(help.Desc)
-		partWidth := lipgloss.Width(part)
-
-		next := used + partWidth
-		if out != "" {
-			next += sepWidth
-		}
-		if next > budget {
-			break
-		}
-		if out != "" {
-			out += separator
-		}
-		out += part
-		used = next
+// truncate clips a styled string to width, appending an ellipsis when it does
+// not fit.
+func truncate(s string, width int) string {
+	if width <= 0 || lipgloss.Width(s) <= width {
+		return s
 	}
-	return out
+	runes := []rune(s)
+	for len(runes) > 0 && lipgloss.Width(string(runes)) > width-1 {
+		runes = runes[:len(runes)-1]
+	}
+	return string(runes) + "…"
 }

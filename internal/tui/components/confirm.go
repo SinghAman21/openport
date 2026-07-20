@@ -1,50 +1,55 @@
 package components
 
 import (
-	"strings"
-
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"github.com/SinghAman21/openport/internal/tui/msg"
 	"github.com/SinghAman21/openport/internal/tui/styles"
 )
 
-// Confirm is the yes/no gate in front of every destructive action. It defaults
-// to "no", so a stray Enter can never kill anything.
+// Confirm is the yes/no gate in front of every destructive action.
+//
+// It is a huh confirm field, which already binds exactly the semantics this
+// needs — y/Y accepts, n/N rejects, ←/→ toggles, enter submits — and defaults
+// to the negative, so a stray enter can never kill anything.
 type Confirm struct {
 	id      string
 	title   string
-	body    string
-	yesText string
-	noText  string
 	payload any
 	danger  bool
-	yes     bool
-	done    bool
-	theme   styles.Theme
+
+	form  *huh.Form
+	value *bool
+	done  bool
 }
 
 // NewConfirm builds a confirmation. payload is round-tripped back in the
 // result so the opener can carry whatever context the follow-up needs.
-func NewConfirm(theme styles.Theme, id, title, body string, payload any, danger bool) *Confirm {
+func NewConfirm(theme styles.Theme, id, title, body, yes, no string, payload any, danger bool) *Confirm {
+	value := new(bool)
+
+	field := huh.NewConfirm().
+		Key("confirm").
+		Title(body).
+		Affirmative(yes).
+		Negative(no).
+		Value(value)
+
+	form := huh.NewForm(huh.NewGroup(field)).
+		WithTheme(huh.ThemeCharm()).
+		WithKeyMap(escapableKeyMap()).
+		WithShowHelp(true).
+		WithShowErrors(false)
+
 	return &Confirm{
-		id:      id,
-		title:   title,
-		body:    body,
-		yesText: "Yes",
-		noText:  "Cancel",
-		payload: payload,
-		danger:  danger,
-		theme:   theme,
+		id: id, title: title, payload: payload, danger: danger,
+		form: form, value: value,
 	}
 }
 
-// WithLabels overrides the button text, e.g. "Kill" / "Keep running".
-func (c *Confirm) WithLabels(yes, no string) *Confirm {
-	c.yesText, c.noText = yes, no
-	return c
-}
+// Init focuses the field.
+func (c *Confirm) Init() tea.Cmd { return c.form.Init() }
 
 // Title implements ModalContent.
 func (c *Confirm) Title() string { return c.title }
@@ -52,116 +57,36 @@ func (c *Confirm) Title() string { return c.title }
 // Danger implements ModalContent.
 func (c *Confirm) Danger() bool { return c.danger }
 
-var confirmKeys = struct {
-	left, right, yes, no, accept, cancel key.Binding
-}{
-	left:   key.NewBinding(key.WithKeys("left", "h", "shift+tab")),
-	right:  key.NewBinding(key.WithKeys("right", "l", "tab")),
-	yes:    key.NewBinding(key.WithKeys("y", "Y")),
-	no:     key.NewBinding(key.WithKeys("n", "N")),
-	accept: key.NewBinding(key.WithKeys("enter")),
-	cancel: key.NewBinding(key.WithKeys("esc")),
-}
+// Hint implements ModalContent; huh renders its own key help.
+func (c *Confirm) Hint() string { return "" }
 
-// Update handles selection and resolution.
+// Update resolves the confirmation once huh reports a terminal state.
 func (c *Confirm) Update(message tea.Msg) (ModalContent, tea.Cmd) {
 	if c.done {
 		return c, nil
 	}
-	keyMsg, ok := message.(tea.KeyMsg)
-	if !ok {
-		return c, nil
+
+	model, cmd := c.form.Update(message)
+	if form, ok := model.(*huh.Form); ok {
+		c.form = form
 	}
 
-	switch {
-	case key.Matches(keyMsg, confirmKeys.left):
-		c.yes = true
-	case key.Matches(keyMsg, confirmKeys.right):
-		c.yes = false
-	case key.Matches(keyMsg, confirmKeys.yes):
-		return c, c.resolve(true)
-	case key.Matches(keyMsg, confirmKeys.no), key.Matches(keyMsg, confirmKeys.cancel):
-		return c, c.resolve(false)
-	case key.Matches(keyMsg, confirmKeys.accept):
-		return c, c.resolve(c.yes)
+	switch c.form.State {
+	case huh.StateCompleted:
+		c.done = true
+		id, payload, answer := c.id, c.payload, *c.value
+		return c, tea.Batch(cmd, func() tea.Msg {
+			return msg.ConfirmResultMsg{ID: id, Confirmed: answer, Payload: payload}
+		})
+	case huh.StateAborted:
+		c.done = true
+		return c, tea.Batch(cmd, func() tea.Msg { return msg.CloseOverlayMsg{} })
 	}
-	return c, nil
+	return c, cmd
 }
 
-func (c *Confirm) resolve(answer bool) tea.Cmd {
-	c.done = true
-	id, payload := c.id, c.payload
-	return func() tea.Msg {
-		return msg.ConfirmResultMsg{ID: id, Confirmed: answer, Payload: payload}
-	}
-}
-
-// Hint implements ModalContent.
-func (c *Confirm) Hint() string { return "y/n · ←/→ choose · enter accept" }
-
-// View renders the prompt and the two buttons. The buttons are the part that
-// must survive a short window, so the prompt is what gets trimmed.
+// View renders the prompt and the two buttons.
 func (c *Confirm) View(width, height int) string {
-	var b strings.Builder
-	if c.body != "" {
-		body := wrap(c.body, width)
-		if budget := height - 2; budget > 0 {
-			body = clipLines(body, budget)
-		}
-		b.WriteString(body)
-		b.WriteString("\n\n")
-	}
-
-	active := c.theme.Selected
-	if c.danger {
-		active = c.theme.Danger.Bold(true)
-	}
-
-	yes, no := "  "+c.yesText+"  ", "  "+c.noText+"  "
-	if c.yes {
-		b.WriteString(active.Render("["+strings.TrimSpace(yes)+"]") + "   " +
-			c.theme.Faint.Render(strings.TrimSpace(no)))
-	} else {
-		b.WriteString(c.theme.Faint.Render(strings.TrimSpace(yes)) + "   " +
-			c.theme.Selected.Render("["+strings.TrimSpace(no)+"]"))
-	}
-
-	return b.String()
-}
-
-// clipLines trims a block to at most n lines, marking the cut so a truncated
-// prompt does not read as the whole prompt.
-func clipLines(s string, n int) string {
-	lines := strings.Split(s, "\n")
-	if len(lines) <= n {
-		return s
-	}
-	if n < 1 {
-		return "…"
-	}
-	return strings.Join(append(lines[:n-1], "…"), "\n")
-}
-
-// wrap hard-wraps plain text to width, preserving explicit newlines.
-func wrap(s string, width int) string {
-	if width <= 0 {
-		return s
-	}
-	var out []string
-	for _, para := range strings.Split(s, "\n") {
-		line := ""
-		for _, word := range strings.Fields(para) {
-			switch {
-			case line == "":
-				line = word
-			case len(line)+1+len(word) <= width:
-				line += " " + word
-			default:
-				out = append(out, line)
-				line = word
-			}
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
+	c.form = c.form.WithWidth(width).WithHeight(max(height, 3))
+	return c.form.View()
 }

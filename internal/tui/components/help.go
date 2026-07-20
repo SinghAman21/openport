@@ -1,11 +1,10 @@
 package components
 
 import (
-	"strings"
-
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/SinghAman21/openport/internal/tui/msg"
 	"github.com/SinghAman21/openport/internal/tui/styles"
@@ -17,23 +16,27 @@ type HelpSection struct {
 	Bindings []key.Binding
 }
 
-// Help is the '?' overlay. It is built from the global keymap plus whatever
-// the active view reports from its Help() method, so the overlay is always
-// accurate for wherever the user currently is.
-//
-// It scrolls: the full keymap runs to about forty rows, which does not fit an
-// 80x24 terminal, and silently clipping the bottom would hide bindings the
-// overlay exists to teach.
+// Help is the '?' overlay: bubbles/help for the rendering, bubbles/viewport
+// for the scrolling. The full keymap runs past forty rows, which does not fit
+// an 80x24 terminal, and clipping it would hide the bindings the overlay
+// exists to teach.
 type Help struct {
 	sections []HelpSection
+	help     help.Model
+	viewport viewport.Model
 	theme    styles.Theme
-	offset   int
-	overflow bool
+	ready    bool
 }
 
 // NewHelp builds the overlay.
 func NewHelp(theme styles.Theme, sections []HelpSection) *Help {
-	return &Help{sections: sections, theme: theme}
+	h := help.New()
+	h.ShowAll = true
+	h.Styles.FullKey = h.Styles.FullKey.Foreground(styles.Accent).Bold(true)
+	h.Styles.FullDesc = h.Styles.FullDesc.Foreground(styles.Text)
+	h.Styles.FullSeparator = h.Styles.FullSeparator.Foreground(styles.Subtle)
+
+	return &Help{sections: sections, help: h, viewport: viewport.New(0, 0), theme: theme}
 }
 
 // Title implements ModalContent.
@@ -45,98 +48,83 @@ func (h *Help) Danger() bool { return false }
 // Hint implements ModalContent, advertising the scroll keys only when there is
 // something below the fold.
 func (h *Help) Hint() string {
-	if h.overflow {
+	if h.ready && h.viewport.TotalLineCount() > h.viewport.Height {
 		return "↑/↓ scroll"
 	}
 	return ""
 }
 
-var helpKeys = struct{ up, down, close key.Binding }{
-	up:    key.NewBinding(key.WithKeys("up", "k", "pgup")),
-	down:  key.NewBinding(key.WithKeys("down", "j", "pgdown", " ")),
-	close: key.NewBinding(key.WithKeys("esc", "?", "q")),
-}
+var helpCloseKeys = key.NewBinding(key.WithKeys("esc", "?", "q"))
 
-// Update scrolls, or closes the overlay.
+// Update scrolls through the viewport, or closes the overlay.
 func (h *Help) Update(message tea.Msg) (ModalContent, tea.Cmd) {
-	keyMsg, ok := message.(tea.KeyMsg)
-	if !ok {
-		return h, nil
-	}
-	switch {
-	case key.Matches(keyMsg, helpKeys.close):
+	if keyMsg, ok := message.(tea.KeyMsg); ok && key.Matches(keyMsg, helpCloseKeys) {
 		return h, func() tea.Msg { return msg.CloseOverlayMsg{} }
-	case key.Matches(keyMsg, helpKeys.up):
-		if h.offset > 0 {
-			h.offset--
-		}
-	case key.Matches(keyMsg, helpKeys.down):
-		h.offset++
 	}
-	return h, nil
+	vp, cmd := h.viewport.Update(message)
+	h.viewport = vp
+	return h, cmd
 }
 
-// View renders as many bindings as fit, scrolled to the current offset.
+// View renders the bindings, scrolled to the current offset.
 func (h *Help) View(width, height int) string {
-	lines := h.lines(width)
+	h.help.Width = width
+	h.viewport.Width, h.viewport.Height = width, height
 
-	if height < 1 {
-		height = 1
-	}
-	h.overflow = len(lines) > height
-
-	// Clamp the offset so scrolling cannot run past the end and leave the
-	// overlay looking empty.
-	maxOffset := len(lines) - height
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
-	if h.offset > maxOffset {
-		h.offset = maxOffset
-	}
-
-	end := min(h.offset+height, len(lines))
-	visible := lines[h.offset:end]
-
-	// Pad so the footer stays pinned rather than jumping as you scroll.
-	for len(visible) < height {
-		visible = append(visible, "")
-	}
-	return strings.Join(visible, "\n")
-}
-
-// lines flattens the sections into individually renderable rows, which is what
-// makes scrolling by row possible.
-func (h *Help) lines(width int) []string {
-	var out []string
-	for _, s := range h.sections {
-		if len(s.Bindings) == 0 {
+	// One help.Model render per section keeps each group under its own
+	// heading; help.FullHelpView alone lays columns out but has no notion of
+	// a titled block.
+	var content string
+	for i, section := range h.sections {
+		if len(section.Bindings) == 0 {
 			continue
 		}
-		if len(out) > 0 {
-			out = append(out, "")
+		if i > 0 {
+			content += "\n\n"
 		}
-		out = append(out, h.theme.Subtitle.Render(strings.ToUpper(s.Title)))
+		content += h.theme.Subtitle.Render(section.Title) + "\n" +
+			h.help.FullHelpView(columns(section.Bindings, width))
+	}
+	if content == "" {
+		content = h.theme.Faint.Render("No bindings.")
+	}
 
-		for _, bind := range s.Bindings {
-			help := bind.Help()
-			if help.Key == "" {
-				continue
-			}
-			row := h.theme.StatusKey.Render(pad(help.Key, 12)) + h.theme.Body.Render(help.Desc)
-			out = append(out, truncate(row, width))
-		}
-	}
-	if len(out) == 0 {
-		return []string{h.theme.Faint.Render("No bindings.")}
-	}
-	return out
+	h.viewport.SetContent(content)
+	h.ready = true
+	return h.viewport.View()
 }
 
-// pad right-pads s to n display cells.
-func pad(s string, n int) string {
-	if w := lipgloss.Width(s); w < n {
-		return s + strings.Repeat(" ", n-w)
+// minColumnWidth is the room one "key  description" pair needs before the
+// column becomes unreadable.
+const minColumnWidth = 26
+
+// columns splits bindings into the column groups help.FullHelpView expects.
+//
+// The count is derived from the available width: FullHelpView joins its groups
+// horizontally without reflowing, so asking for more columns than fit wraps
+// entries mid-pair and corrupts the whole block.
+func columns(bindings []key.Binding, width int) [][]key.Binding {
+	count := width / minColumnWidth
+	if count < 1 {
+		count = 1
 	}
-	return s + " "
+	if count > len(bindings) {
+		count = len(bindings)
+	}
+	if count == 0 {
+		return nil
+	}
+
+	// Spread evenly so the last column is not left with a single entry.
+	perColumn := (len(bindings) + count - 1) / count
+
+	out := make([][]key.Binding, 0, count)
+	for start := 0; start < len(bindings); start += perColumn {
+		end := start + perColumn
+		if end > len(bindings) {
+			end = len(bindings)
+		}
+		out = append(out, bindings[start:end])
+	}
+	return out
 }

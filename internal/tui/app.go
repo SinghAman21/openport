@@ -270,7 +270,7 @@ func (m Model) handleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.palette.Close()
 			if !selectable {
 				if item.Badge == "PRO" {
-					return m.withToast(msg.Warn(item.Title + " requires OpenPort Pro"))
+					return m.withToast(msg.Warn(item.Name + " requires OpenPort Pro"))
 				}
 				return m, nil
 			}
@@ -537,7 +537,32 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 	if group, ok := views.EditGroupRequest(message); ok {
 		return m.openModal(groupForm(group))
 	}
-	return m.broadcast(message)
+	return m.broadcastAll(message)
+}
+
+// broadcastAll fans an unrecognised message out to the overlays as well as the
+// views.
+//
+// The Charm widgets do real work on commands, not just on keys: huh answers a
+// confirm by emitting NextField, and bubbles/list computes its filter matches
+// asynchronously and returns them as a message. Routing only keystrokes to the
+// overlays leaves both half-wired — the confirm never resolves and the palette
+// never filters — so whatever an overlay is on screen, it hears everything.
+func (m Model) broadcastAll(message tea.Msg) (tea.Model, tea.Cmd) {
+	cmds := make([]tea.Cmd, 0, 3)
+
+	if m.modal != nil {
+		modal, cmd := m.modal.Update(message)
+		m.modal = modal
+		cmds = append(cmds, cmd)
+	}
+	if m.palette.IsOpen() {
+		palette, cmd := m.palette.Update(message)
+		m.palette = palette
+		cmds = append(cmds, cmd)
+	}
+	cmds = append(cmds, m.broadcastCmd(message))
+	return m, tea.Batch(cmds...)
 }
 
 // --- result handlers -----------------------------------------------------
@@ -850,9 +875,10 @@ func (m Model) confirmKillPort(t msg.KillPortMsg) (tea.Model, tea.Cmd) {
 			t.Port, target.Reason)
 		return m.openModal(components.NewConfirm(
 			m.theme, confirmKillProtected, "Protected port", body,
+			"Override", "Keep it safe",
 			killPayload{port: t.Port, force: t.Force, override: true, label: label},
 			true,
-		).WithLabels("Override", "Keep it safe"))
+		))
 	}
 
 	body := fmt.Sprintf("Send %s to %s on port %d?", signal, label, t.Port)
@@ -862,9 +888,10 @@ func (m Model) confirmKillPort(t msg.KillPortMsg) (tea.Model, tea.Cmd) {
 	}
 	return m.openModal(components.NewConfirm(
 		m.theme, confirmKill, "Confirm kill", body,
+		"Kill", "Cancel",
 		killPayload{port: t.Port, force: t.Force, override: t.Override, label: label},
 		true,
-	).WithLabels("Kill", "Cancel"))
+	))
 }
 
 func (m Model) confirmKillPID(t msg.KillPIDMsg) (tea.Model, tea.Cmd) {
@@ -875,8 +902,9 @@ func (m Model) confirmKillPID(t msg.KillPIDMsg) (tea.Model, tea.Cmd) {
 	body := fmt.Sprintf("Send %s to process %d?", signal, t.PID)
 	return m.openModal(components.NewConfirm(
 		m.theme, confirmKillPID, "Confirm kill", body,
+		"Kill", "Cancel",
 		killPIDPayload{pid: t.PID, force: t.Force}, true,
-	).WithLabels("Kill", "Cancel"))
+	))
 }
 
 // confirmKillRange counts what would actually die before asking, so the user
@@ -914,8 +942,9 @@ func (m Model) confirmKillRange(t msg.KillRangeMsg) (tea.Model, tea.Cmd) {
 
 	return m.openModal(components.NewConfirm(
 		m.theme, confirmKillRange, "Confirm kill range", body,
+		"Kill all", "Cancel",
 		killRangePayload{lo: lo, hi: hi, force: t.Force, override: t.Override}, true,
-	).WithLabels("Kill all", "Cancel"))
+	))
 }
 
 func (m Model) confirmGroupAction(t msg.GroupActionMsg) (tea.Model, tea.Cmd) {
@@ -933,24 +962,27 @@ func (m Model) confirmGroupAction(t msg.GroupActionMsg) (tea.Model, tea.Cmd) {
 	body := fmt.Sprintf("Shut down every service in %q (%d ports)?", t.Group, count)
 	return m.openModal(components.NewConfirm(
 		m.theme, confirmGroupKill, "Confirm group shutdown", body,
+		"Shut down", "Cancel",
 		groupPayload{name: t.Group, force: t.Force}, true,
-	).WithLabels("Shut down", "Cancel"))
+	))
 }
 
 func (m Model) confirmDelete(kind, name string) (tea.Model, tea.Cmd) {
 	body := fmt.Sprintf("Delete %s %q?", kind, name)
 	return m.openModal(components.NewConfirm(
 		m.theme, confirmDeleteItem, "Confirm delete", body,
+		"Delete", "Cancel",
 		deletePayload{kind: kind, name: name}, true,
-	).WithLabels("Delete", "Cancel"))
+	))
 }
 
 func (m Model) confirmPull() (tea.Model, tea.Cmd) {
 	body := "Pulling replaces your local aliases, groups, blueprints and " +
 		"protected ports with the workspace snapshot.\n\nContinue?"
 	return m.openModal(components.NewConfirm(
-		m.theme, confirmPullRemote, "Confirm pull", body, nil, true,
-	).WithLabels("Replace local", "Cancel"))
+		m.theme, confirmPullRemote, "Confirm pull", body,
+		"Replace local", "Cancel", nil, true,
+	))
 }
 
 // handleConfirmResult runs the action a confirmation was guarding.
@@ -1374,8 +1406,12 @@ func (m Model) shutdown() (tea.Model, tea.Cmd) {
 func (m Model) openModal(content components.ModalContent) (tea.Model, tea.Cmd) {
 	m.palette.Close()
 	m.modal = components.NewModal(m.theme, content)
-	if form, ok := content.(*components.Form); ok {
-		return m, form.Init()
+	// huh-backed content needs Init to focus its first field.
+	switch c := content.(type) {
+	case *components.Form:
+		return m, c.Init()
+	case *components.Confirm:
+		return m, c.Init()
 	}
 	return m, nil
 }

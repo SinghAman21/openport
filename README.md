@@ -56,8 +56,9 @@ openport   1 Ports   2 Actions   3 Aliases   4 Blueprints   5 Config   6 History
 
 There are two ways to reach any capability, and they run the same code:
 
-- **`2` — the actions menu.** Everything OpenPort can do, grouped and described.
-- **`:` or `ctrl+k` — the command palette.** Fuzzy-search the same list.
+- **`2` — the actions menu.** Everything OpenPort can do, described and paged,
+  with `/` to narrow it.
+- **`:` or `ctrl+k` — the command palette.** Fuzzy-search the same catalog.
 
 Anything needing input (a port number, an alias, a range) opens a form with
 inline validation. Anything destructive opens a confirmation. **`esc` closes
@@ -109,7 +110,7 @@ In the Ports view:
 | `p` | protect / unprotect |
 | `w` | toggle watch mode |
 | `f` | suggest a free port |
-| `/` | filter by port, process, alias or group |
+| `/` | filter (ports, and the actions menu) |
 | `s` / `S` | cycle sort column / reverse |
 | `tab` | show/hide the detail pane |
 

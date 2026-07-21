@@ -195,10 +195,13 @@ type DetectDriftMsg struct{}
 
 // --- Results -------------------------------------------------------------
 
-// PortsLoadedMsg carries a fresh listing.
+// PortsLoadedMsg carries a fresh listing. Background marks a listing the
+// ambient poll produced, which the root treats silently rather than as work
+// the user is waiting on.
 type PortsLoadedMsg struct {
-	Ports []ports.Port
-	Err   error
+	Ports      []ports.Port
+	Err        error
+	Background bool
 }
 
 // PortCheckedMsg carries the result of inspecting one port.
@@ -343,6 +346,11 @@ type ConfirmResultMsg struct {
 
 // TickMsg drives time-based UI updates.
 type TickMsg time.Time
+
+// AutoRefreshMsg fires the ambient background poll that keeps the ports list
+// and the history current — a server started in another terminal appears, a
+// killed one disappears — without the user asking. It re-arms itself.
+type AutoRefreshMsg struct{}
 
 // Toast helpers keep call sites terse at the emit site.
 

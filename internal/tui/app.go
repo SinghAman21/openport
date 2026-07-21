@@ -132,11 +132,13 @@ func New(svc ports.Service, st store.Store, provider opsync.SyncProvider, initia
 	}
 }
 
-// Init loads the first listing and the stored collections.
+// Init loads the first listing and the stored collections, and starts the
+// ambient poll that keeps them current.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		listPortsCmd(m.svc),
 		loadDataCmd(m.store, m.workDir),
+		autoRefreshCmd(),
 		m.spinner.Tick,
 		m.windowTitle(),
 	)
@@ -456,6 +458,9 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 	case msg.LoadDataMsg:
 		return m, loadDataCmd(m.store, m.workDir)
 
+	case msg.AutoRefreshMsg:
+		return m.onAutoRefresh()
+
 	// --- Pro intents ---
 
 	case msg.LoginMsg:
@@ -568,16 +573,42 @@ func (m Model) broadcastAll(message tea.Msg) (tea.Model, tea.Cmd) {
 // --- result handlers -----------------------------------------------------
 
 func (m Model) onPortsLoaded(t msg.PortsLoadedMsg) (tea.Model, tea.Cmd) {
-	m.endBusy()
+	// The ambient poll never touched the busy counter, so it must not clear it
+	// either — otherwise a background refresh landing mid-probe would drop the
+	// spinner while the probe is still running.
+	if !t.Background {
+		m.endBusy()
+	}
 	if t.Err == nil {
 		m.lastPorts = t.Ports
 	}
 	cmd := m.broadcastCmd(t)
-	if t.Err != nil {
+	// A background poll that fails should not raise a toast every few seconds;
+	// the ports view surfaces the error in place. Only a listing the user
+	// explicitly asked for gets the notification.
+	if t.Err != nil && !t.Background {
 		model, toastCmd := m.withToast(msg.Error("Could not list ports: " + t.Err.Error()))
 		return model, tea.Batch(cmd, toastCmd)
 	}
 	return m, cmd
+}
+
+// onAutoRefresh is the ambient background poll. It keeps the ports list and the
+// history current without the user pressing anything, and re-arms itself.
+//
+// It is silent — no spinner — because a refresh the user did not request should
+// not look like work they are waiting on. Store data is always reloaded (that
+// is what closes the "history updates only after restart" gap); ports are
+// reloaded only when watch mode is not already doing it faster.
+func (m Model) onAutoRefresh() (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{
+		autoRefreshCmd(),
+		loadDataCmd(m.store, m.workDir),
+	}
+	if !m.watching {
+		cmds = append(cmds, backgroundListCmd(m.svc))
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) onWatchTick(t msg.WatchTickMsg) (tea.Model, tea.Cmd) {
@@ -654,12 +685,14 @@ func (m Model) onKilled(t msg.KilledMsg) (tea.Model, tea.Cmd) {
 	}
 
 	model, toastCmd := m.withToast(notice)
-	// The table is stale the moment anything dies; refresh unless watch mode
-	// is already about to do it.
-	if m.watching {
-		return model, toastCmd
+	// The listing is stale the moment anything dies, and the kill just wrote a
+	// history entry — reload both so History reflects it without waiting for
+	// the ambient tick. Ports refresh only when watch mode is not already on it.
+	refresh := []tea.Cmd{toastCmd, loadDataCmd(m.store, m.workDir)}
+	if !m.watching {
+		refresh = append(refresh, listPortsCmd(m.svc))
 	}
-	return model, tea.Batch(toastCmd, listPortsCmd(m.svc))
+	return model, tea.Batch(refresh...)
 }
 
 func pluralSkip(n int, reason string) string {
@@ -762,7 +795,8 @@ func (m Model) onBlueprintApplied(t msg.BlueprintAppliedMsg) (tea.Model, tea.Cmd
 			t.Name, conflict))
 	}
 	model, toastCmd := m.withToast(notice)
-	return model, tea.Batch(cmd, toastCmd)
+	// Applying a blueprint wrote a history entry; reload so History shows it.
+	return model, tea.Batch(cmd, toastCmd, loadDataCmd(m.store, m.workDir))
 }
 
 func (m Model) onSynced(t msg.SyncedMsg) (tea.Model, tea.Cmd) {
@@ -1385,7 +1419,30 @@ func (m Model) navigate(to msg.Route) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.route = to
-	return m, m.windowTitle()
+
+	// Give the destination fresh state immediately rather than making the user
+	// wait for the next ambient tick. This is what the History view needed
+	// most: it was only ever loaded at startup, so it showed the world as it
+	// was the last time the app launched.
+	cmds := []tea.Cmd{m.windowTitle()}
+	if isDataBacked(to) {
+		cmds = append(cmds, loadDataCmd(m.store, m.workDir))
+	}
+	if to == msg.RoutePorts {
+		cmds = append(cmds, backgroundListCmd(m.svc))
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// isDataBacked reports whether a route renders store-backed collections, and so
+// benefits from a reload when navigated to.
+func isDataBacked(r msg.Route) bool {
+	switch r {
+	case msg.RouteAliases, msg.RouteBlueprints, msg.RouteConfig, msg.RouteHistory:
+		return true
+	default:
+		return false
+	}
 }
 
 func (m Model) refresh() (tea.Model, tea.Cmd) {

@@ -119,10 +119,14 @@ In the Ports view:
 ## What it does
 
 **Ports and processes.** List every listener with its process, PID, command
-line, user and bind address. Check a single port. Kill by port, by PID, or
-across a range. Watch mode refreshes live while staying fully interactive —
-your selection follows the process, not the row number, so the cursor does not
-jump when the table reorders. TCP and HTTP health checks render as badges.
+line, user and bind address. The list is **live** — a server you start in
+another terminal appears within a few seconds, a killed one disappears, and the
+header shows a `+2 -1` delta so you can see it happening. Your selection follows
+the process, not the row number, so the cursor does not jump when the table
+reorders. Check a single port. Kill by port, by PID, or across a range. Watch
+mode (`w`) is the same thing at a faster cadence with a `● watching` indicator,
+for when you are actively staring at a restart. TCP and HTTP health checks
+render as badges.
 
 **Names.** Aliases give a port a name (`frontend` → 3000). Groups bundle ports
 (`dev_stack` → 3000, 5432, 6379) so you can shut down or health-check a whole
@@ -142,10 +146,11 @@ has been displaced. It never starts or kills anything on your behalf.
 **Project config.** Drop an `.openport.yml` in a project and OpenPort picks it
 up automatically, including from a subdirectory. Edit it from inside the tool.
 
-**History and safety.** Every mutating action is recorded with a timestamp. A
-separate log captures OS-level trouble — permission errors, procfs fallbacks,
-probes that timed out — so a port showing no PID has a visible explanation
-rather than being a mystery.
+**History and safety.** Every mutating action is recorded with a timestamp, and
+the History view updates as they happen — no restart needed. A separate log
+captures OS-level trouble — permission errors, procfs fallbacks, probes that
+timed out — so a port showing no PID has a visible explanation rather than
+being a mystery.
 
 ---
 

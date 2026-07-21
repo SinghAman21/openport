@@ -94,6 +94,7 @@ type fakeStore struct {
 	groups    []model.Group
 	blueprint []model.Blueprint
 	protected model.ProtectedPorts
+	history   []model.HistoryEntry
 	saved     []string
 }
 
@@ -137,8 +138,12 @@ func (f *fakeStore) SaveProjectConfig(string, model.ProjectConfig) error {
 	f.saved = append(f.saved, "project")
 	return nil
 }
-func (f *fakeStore) AppendHistory(model.HistoryEntry) error    { return nil }
-func (f *fakeStore) History(int) ([]model.HistoryEntry, error) { return nil, nil }
+func (f *fakeStore) AppendHistory(e model.HistoryEntry) error {
+	// Newest first, matching the real store's History contract.
+	f.history = append([]model.HistoryEntry{e}, f.history...)
+	return nil
+}
+func (f *fakeStore) History(int) ([]model.HistoryEntry, error) { return f.history, nil }
 func (f *fakeStore) AppendLog(model.LogEntry) error            { return nil }
 func (f *fakeStore) Logs(int) ([]model.LogEntry, error)        { return nil, nil }
 func (f *fakeStore) Snapshot() (opsync.Snapshot, error)        { return opsync.Snapshot{}, nil }
@@ -1174,4 +1179,150 @@ func lastLine(frame string) string {
 		}
 	}
 	return ""
+}
+
+// --- dynamic updates -----------------------------------------------------
+
+// portKeys reduces a listing to the set of ports present, for asserting what
+// the ambient poll picked up.
+func portKeys(list []ports.Port) map[int]bool {
+	out := make(map[int]bool, len(list))
+	for _, p := range list {
+		out[p.Port] = true
+	}
+	return out
+}
+
+// TestPortsAutoRefreshReflectsAddsAndRemoves is the ports half of the report:
+// a process that starts or stops in another terminal should appear or vanish
+// without the user pressing anything.
+func TestPortsAutoRefreshReflectsAddsAndRemoves(t *testing.T) {
+	h := newHarness(t, nil)
+	if !portKeys(h.model.lastPorts)[5432] {
+		t.Fatal("fixture should start with port 5432")
+	}
+
+	// The world changes underneath us: 5432 goes away, 8080 shows up.
+	h.svc.list = []ports.Port{
+		{Socket: platform.Socket{Port: 3000, Protocol: "tcp", PID: 100, Process: "node"}, Alias: "frontend"},
+		{Socket: platform.Socket{Port: 8080, Protocol: "tcp", PID: 400, Process: "caddy"}},
+	}
+
+	h.send(msg.AutoRefreshMsg{})
+
+	got := portKeys(h.model.lastPorts)
+	if !got[8080] {
+		t.Error("auto-refresh did not pick up the newly opened port 8080")
+	}
+	if got[5432] {
+		t.Error("auto-refresh did not drop the closed port 5432")
+	}
+}
+
+// TestAutoRefreshReArms checks the poll keeps itself going; a single-shot tick
+// would make the list live exactly once.
+func TestAutoRefreshReArms(t *testing.T) {
+	h := newHarness(t, nil)
+	_, cmd := h.model.Update(msg.AutoRefreshMsg{})
+	if cmd == nil {
+		t.Fatal("auto-refresh returned no command, so the poll would stop after one tick")
+	}
+}
+
+// TestAutoRefreshIsSilent pins that the ambient poll does not flash the
+// spinner — feedback is for work the user asked for.
+func TestAutoRefreshIsSilent(t *testing.T) {
+	h := newHarness(t, nil)
+	h.send(msg.PortsLoadedMsg{Ports: samplePorts()}) // clear the startup busy
+
+	if h.model.busy != 0 {
+		t.Fatalf("precondition: busy = %d, want 0", h.model.busy)
+	}
+	h.send(msg.AutoRefreshMsg{})
+	if h.model.busy != 0 {
+		t.Errorf("auto-refresh raised the busy spinner (busy = %d)", h.model.busy)
+	}
+}
+
+// TestBackgroundLoadDoesNotClearAnActiveSpinner covers the coupling that made
+// the silent path tricky: a background listing landing mid-probe must not drop
+// the spinner the probe raised.
+func TestBackgroundLoadDoesNotClearAnActiveSpinner(t *testing.T) {
+	h := newHarness(t, nil)
+	h.send(msg.PortsLoadedMsg{Ports: samplePorts()}) // clear startup busy
+
+	// A health check is now in flight.
+	updated, _ := h.model.Update(msg.HealthCheckMsg{Port: 3000})
+	h.model = updated.(Model)
+	if h.model.busy == 0 {
+		t.Fatal("health check should have raised the spinner")
+	}
+
+	// A background poll completes while it runs.
+	updated, _ = h.model.Update(msg.PortsLoadedMsg{Ports: samplePorts(), Background: true})
+	if got := updated.(Model).busy; got == 0 {
+		t.Error("a background listing cleared the spinner the probe was holding")
+	}
+}
+
+// TestHistoryUpdatesOnNavigateWithoutRestart is the history half of the report:
+// an entry written after launch must show when you open History, not only
+// after a restart.
+func TestHistoryUpdatesOnNavigateWithoutRestart(t *testing.T) {
+	h := newHarness(t, nil)
+
+	// An action happens after startup — the store gains a history entry.
+	h.store.history = []model.HistoryEntry{{
+		At:      time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+		Kind:    model.ActionKill,
+		Summary: "killed vite on port 5173",
+		Success: true,
+	}}
+
+	h.sendKey("6") // navigate to History
+	if h.model.route != msg.RouteHistory {
+		t.Fatal("6 should open the History view")
+	}
+
+	if frame := ansi.Strip(h.model.View()); !strings.Contains(frame, "killed vite on port 5173") {
+		t.Fatalf("History did not reload on navigate; new entry is missing:\n%s", frame)
+	}
+}
+
+// TestHistoryUpdatesOnAmbientTick checks History stays current even while the
+// user sits on it, not only on the navigation into it.
+func TestHistoryUpdatesOnAmbientTick(t *testing.T) {
+	h := newHarness(t, nil)
+	h.sendKey("6")
+
+	h.store.history = []model.HistoryEntry{{
+		At:      time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+		Kind:    model.ActionReserve,
+		Summary: "reserved port 4000 for api",
+		Success: true,
+	}}
+	h.send(msg.AutoRefreshMsg{})
+
+	if frame := ansi.Strip(h.model.View()); !strings.Contains(frame, "reserved port 4000 for api") {
+		t.Fatalf("History did not pick up the ambient reload:\n%s", frame)
+	}
+}
+
+// TestPortsHeaderShowsLiveAndDelta checks the change is visible, so the user
+// can see the list is dynamic rather than having to take it on faith.
+func TestPortsHeaderShowsLiveAndDelta(t *testing.T) {
+	h := newHarness(t, nil)
+
+	if frame := ansi.Strip(h.model.View()); !strings.Contains(frame, "live") {
+		t.Error("ports header should advertise that the list is live")
+	}
+
+	// Open a port; the delta should surface.
+	h.svc.list = append(samplePorts(),
+		ports.Port{Socket: platform.Socket{Port: 8080, Protocol: "tcp", PID: 400, Process: "caddy"}})
+	h.send(msg.AutoRefreshMsg{})
+
+	if frame := ansi.Strip(h.model.View()); !strings.Contains(frame, "+1") {
+		t.Errorf("ports header should show the +1 delta after a port opened:\n%s", lastLine(frame))
+	}
 }

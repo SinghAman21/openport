@@ -73,6 +73,11 @@ type PortsView struct {
 	// user's selection.
 	selectedKey string
 
+	// knownKeys is the set from the previous listing, used to spot what
+	// appeared or disappeared between refreshes so the header can show it.
+	knownKeys      map[string]bool
+	added, removed int
+
 	watching bool
 	loading  bool
 	err      error
@@ -445,9 +450,41 @@ func (v *PortsView) SetWatching(on bool) { v.watching = on }
 
 // setPorts installs a fresh listing, preserving health results and selection.
 func (v *PortsView) setPorts(list []ports.Port) {
+	v.trackChanges(list)
 	v.all = list
 	v.applyHealth()
 	v.rebuild()
+}
+
+// trackChanges records how many ports appeared or disappeared since the last
+// listing, which is what lets the header show the interface is live rather
+// than the user having to trust that it is.
+func (v *PortsView) trackChanges(list []ports.Port) {
+	next := make(map[string]bool, len(list))
+	for _, p := range list {
+		next[p.Key()] = true
+	}
+
+	// The first listing has nothing to compare against, so it must not report
+	// every port as newly "added".
+	if v.knownKeys == nil {
+		v.knownKeys = next
+		return
+	}
+
+	added, removed := 0, 0
+	for k := range next {
+		if !v.knownKeys[k] {
+			added++
+		}
+	}
+	for k := range v.knownKeys {
+		if !next[k] {
+			removed++
+		}
+	}
+	v.added, v.removed = added, removed
+	v.knownKeys = next
 }
 
 // applyHealth re-attaches cached probe results to the current listing, so a
@@ -739,6 +776,14 @@ func (v *PortsView) headerLine(width int) string {
 	}
 	left += v.theme.Faint.Render(" ports")
 
+	// A live dot signals the list refreshes itself; the delta from the last
+	// refresh sits beside it whenever something actually changed, and clears
+	// on the next quiet refresh.
+	left += "  " + v.theme.Success.Render(styles.GlyphWatching) + v.theme.Faint.Render(" live")
+	if delta := v.deltaLabel(); delta != "" {
+		left += " " + v.theme.Accent.Render(delta)
+	}
+
 	if q := v.filterInput.Value(); q != "" {
 		left += v.theme.Accent.Render("  /" + q)
 	}
@@ -754,6 +799,21 @@ func (v *PortsView) headerLine(width int) string {
 		return left
 	}
 	return left + strings.Repeat(" ", gap) + right
+}
+
+// deltaLabel renders the "+2 -1" change indicator, empty when nothing moved.
+func (v *PortsView) deltaLabel() string {
+	if v.added == 0 && v.removed == 0 {
+		return ""
+	}
+	parts := make([]string, 0, 2)
+	if v.added > 0 {
+		parts = append(parts, "+"+strconv.Itoa(v.added))
+	}
+	if v.removed > 0 {
+		parts = append(parts, "-"+strconv.Itoa(v.removed))
+	}
+	return strings.Join(parts, " ")
 }
 
 // detailPane renders everything known about the selected port, trimmed to the

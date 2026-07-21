@@ -30,13 +30,33 @@ const (
 // Tea's command goroutine and returns a result message. Commands never touch
 // model state — that is Update's job, and only Update's.
 
-func listPortsCmd(svc ports.Service) tea.Cmd {
+func listPortsCmd(svc ports.Service) tea.Cmd { return listPortsWith(svc, false) }
+
+// backgroundListCmd is the ambient variant: its result is flagged so the root
+// does not treat it as work the user is waiting on, which would flash the
+// spinner every few seconds.
+func backgroundListCmd(svc ports.Service) tea.Cmd { return listPortsWith(svc, true) }
+
+func listPortsWith(svc ports.Service, background bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 		defer cancel()
 		list, err := svc.List(ctx)
-		return msg.PortsLoadedMsg{Ports: list, Err: err}
+		return msg.PortsLoadedMsg{Ports: list, Err: err, Background: background}
 	}
+}
+
+// AutoRefreshInterval is how often the ambient poll runs. It is slower than
+// watch mode: watch is the explicit, indicator-lit "I am staring at this"
+// mode, while this just keeps the interface from ever being meaningfully out
+// of date.
+const AutoRefreshInterval = 3 * time.Second
+
+// autoRefreshCmd schedules the next ambient poll.
+func autoRefreshCmd() tea.Cmd {
+	return tea.Tick(AutoRefreshInterval, func(time.Time) tea.Msg {
+		return msg.AutoRefreshMsg{}
+	})
 }
 
 func checkPortCmd(svc ports.Service, port int) tea.Cmd {

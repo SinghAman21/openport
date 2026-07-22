@@ -108,7 +108,8 @@ func NewPortsView(theme styles.Theme) *PortsView {
 	}
 }
 
-// tableStyles applies the app theme to a bubbles table.
+// tableStyles applies the app theme to a bubbles table. It is shared by every
+// table in the app, so the selection reads identically wherever it appears.
 func tableStyles(theme styles.Theme) table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
@@ -117,10 +118,16 @@ func tableStyles(theme styles.Theme) table.Styles {
 		BorderBottom(true).
 		Bold(true).
 		Foreground(styles.Muted)
-	s.Selected = s.Selected.
-		Foreground(styles.Accent).
-		Bold(true)
-	s.Cell = s.Cell.Foreground(styles.Text)
+
+	// The selection is a full-width tinted bar, not just coloured text — the
+	// single biggest difference between "a Go program printed a table" and a
+	// cockpit. It only fills edge to edge because Cell is left colourless
+	// (default padding, no foreground): bubbles/table renders each cell then
+	// wraps the selected row in Selected, and any per-cell foreground would emit
+	// a reset that punches the bar's background back out to the terminal default
+	// mid-row. Cells therefore inherit the terminal's own text colour, which is
+	// what body text should be anyway.
+	s.Selected = theme.Selected
 	return s
 }
 
@@ -700,10 +707,14 @@ func (v *PortsView) View(width, height int) string {
 
 	switch {
 	case sideBySide:
+		// The panel hugs its content rather than stretching to the table's full
+		// height: a rounded border drawn around a screenful of empty rows is the
+		// kind of hollow chrome that makes a UI feel like a wireframe. Sitting
+		// snug to what it holds reads as deliberate instead.
+		panelWidth := width - tableWidth - 4
 		detail := v.theme.Panel.
-			Width(width - tableWidth - 4).
-			Height(bodyHeight - 2).
-			Render(v.detailPane(width-tableWidth-8, bodyHeight-2))
+			Width(panelWidth).
+			Render(v.detailPane(panelWidth-4, bodyHeight-2))
 
 		return header + "\n" + lipgloss.JoinHorizontal(lipgloss.Top,
 			lipgloss.NewStyle().Width(tableWidth).Render(body),

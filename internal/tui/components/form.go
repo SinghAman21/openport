@@ -110,7 +110,7 @@ func NewForm(id, title string, fields []FormField) *Form {
 	}
 
 	f.form = huh.NewForm(huh.NewGroup(huhFields...)).
-		WithTheme(huh.ThemeCharm()).
+		WithTheme(huhTheme()).
 		WithKeyMap(escapableKeyMap()).
 		WithShowHelp(true).
 		WithShowErrors(true)

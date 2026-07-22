@@ -37,7 +37,7 @@ func NewConfirm(theme styles.Theme, id, title, body, yes, no string, payload any
 		Value(value)
 
 	form := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(huh.ThemeCharm()).
+		WithTheme(huhTheme()).
 		WithKeyMap(escapableKeyMap()).
 		WithShowHelp(true).
 		WithShowErrors(false)

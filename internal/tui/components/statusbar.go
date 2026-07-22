@@ -36,19 +36,28 @@ type StatusBar struct {
 }
 
 // View renders the bar to exactly width cells.
+//
+// Every segment bakes the bar surface colour into its own style. Lip Gloss
+// does not repaint a background across the reset codes that nested, pre-styled
+// segments emit, so a single outer wrapper would leave the bar full of holes;
+// painting each piece (and the connective spacing) is what keeps it solid.
 func (s StatusBar) View(theme styles.Theme, width int) string {
-	left := theme.StatusKey.Render(s.Title)
+	// The active view name is a filled "mode" segment, the way an editor names
+	// its mode in the corner — an immediate, always-present anchor for "where am
+	// I" that the eye finds without reading.
+	left := theme.StatusMode.Render(s.Title)
 	if s.Watching {
-		left += "  " + theme.Success.Render(styles.GlyphWatching+" watching")
+		left += theme.BarSeg.Render("  ") +
+			theme.BarSeg.Foreground(styles.Success).Render(styles.GlyphWatching+" watching")
 	}
 	if s.Pro {
-		left += "  " + theme.BadgePro.Render("PRO")
+		left += theme.BarSeg.Render("  ") + theme.BadgePro.Render("PRO")
 	}
 	if s.Selection != "" {
-		left += theme.StatusHint.Render("  " + styles.GlyphArrow + " " + s.Selection)
+		left += theme.BarHint.Render("  " + styles.GlyphArrow + " " + s.Selection)
 	}
 	if s.Busy != "" {
-		left += "  " + s.Busy
+		left += theme.BarSeg.Render("  " + s.Busy)
 	}
 
 	right := s.Message
@@ -58,9 +67,21 @@ func (s StatusBar) View(theme styles.Theme, width int) string {
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right) - 2
 	if gap < 1 {
-		return theme.StatusBar.Render(truncate(left, width-2))
+		// Too tight for the fill: keep the mode segment legible and let the bar
+		// surface run to the edge.
+		content := truncate(left, width-1)
+		return content + theme.BarFill.Render(strings.Repeat(" ", max0(width-lipgloss.Width(content))))
 	}
-	return theme.StatusBar.Render(left + strings.Repeat(" ", gap) + right)
+	return theme.BarSeg.Render(" ") + left +
+		theme.BarFill.Render(strings.Repeat(" ", gap)) +
+		right + theme.BarSeg.Render(" ")
+}
+
+func max0(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 // renderHints defers to bubbles/help for the "key desc · key desc" line, which
@@ -71,9 +92,11 @@ func renderHints(hints []key.Binding, budget int) string {
 	}
 	h := help.New()
 	h.Width = budget
-	h.Styles.ShortKey = h.Styles.ShortKey.Foreground(styles.Accent).Bold(true)
-	h.Styles.ShortDesc = h.Styles.ShortDesc.Foreground(styles.Subtle)
-	h.Styles.ShortSeparator = h.Styles.ShortSeparator.Foreground(styles.Subtle)
+	// Paint the bar surface behind the hints too, so the right end of the strip
+	// stays a continuous fill instead of hints on the bare terminal background.
+	h.Styles.ShortKey = h.Styles.ShortKey.Foreground(styles.Accent).Background(styles.BarBg).Bold(true)
+	h.Styles.ShortDesc = h.Styles.ShortDesc.Foreground(styles.BarText).Background(styles.BarBg)
+	h.Styles.ShortSeparator = h.Styles.ShortSeparator.Foreground(styles.Subtle).Background(styles.BarBg)
 	return h.ShortHelpView(hints)
 }
 

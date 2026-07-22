@@ -18,6 +18,23 @@ var (
 	Muted  = lipgloss.AdaptiveColor{Light: "#71717A", Dark: "#A1A1AA"}
 	Subtle = lipgloss.AdaptiveColor{Light: "#A1A1AA", Dark: "#52525B"}
 	Border = lipgloss.AdaptiveColor{Light: "#D4D4D8", Dark: "#3F3F46"}
+
+	// AccentOn is legible text placed on top of an Accent fill. It has to track
+	// the Accent's own light/dark flip: on a light terminal Accent is a deep
+	// violet (white text), on a dark one it is a pale violet (near-black text).
+	AccentOn = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#1E1B2E"}
+
+	// BarBg is the chrome surface behind the top and bottom bars — a violet-
+	// tinted panel that lifts them off the body without a hard border.
+	BarBg = lipgloss.AdaptiveColor{Light: "#E7E1F5", Dark: "#241E33"}
+	// BarText is default text on that surface, one step softer than body text.
+	BarText = lipgloss.AdaptiveColor{Light: "#52525B", Dark: "#B4B4BD"}
+
+	// SelBg / SelFg are the highlighted-row surface. A saturated-enough tint to
+	// be unmistakable — this is a cockpit that kills processes, so which row is
+	// selected must never be a guess — without the fatigue of a full accent bar.
+	SelBg = lipgloss.AdaptiveColor{Light: "#DED7FB", Dark: "#332C52"}
+	SelFg = lipgloss.AdaptiveColor{Light: "#1E1B2E", Dark: "#F5F3FF"}
 )
 
 // Theme bundles every prebuilt style the views compose with.
@@ -26,9 +43,18 @@ type Theme struct {
 	App        lipgloss.Style
 	Header     lipgloss.Style
 	HeaderName lipgloss.Style
+	Brand      lipgloss.Style
 	StatusBar  lipgloss.Style
 	StatusKey  lipgloss.Style
 	StatusHint lipgloss.Style
+	StatusMode lipgloss.Style
+
+	// Bar segments — text/keys/hints painted on the BarBg surface, so the top
+	// and bottom bars read as continuous fills instead of floating text.
+	BarFill lipgloss.Style
+	BarSeg  lipgloss.Style
+	BarKey  lipgloss.Style
+	BarHint lipgloss.Style
 
 	// Text
 	Title    lipgloss.Style
@@ -75,15 +101,34 @@ func New() Theme {
 	base := lipgloss.NewStyle()
 
 	badge := base.Padding(0, 1).Bold(true)
-	toast := base.Padding(0, 2).Border(lipgloss.RoundedBorder()).Bold(true)
+	// Toasts lead with a heavy accent bar down their left edge and a filled
+	// surface, so a result reads as a card that slid in rather than a line of
+	// coloured text.
+	toast := base.Padding(0, 2).
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		Bold(true)
+
+	// Bar building blocks. Every segment that sits on a bar bakes BarBg into its
+	// own style: Lip Gloss will not repaint a background across the reset codes
+	// that nested, pre-rendered segments emit, so an outer wrapper alone leaves
+	// holes. Painting each segment (and the filler) is what makes the fill solid.
+	barFill := base.Background(BarBg)
+	barSeg := base.Foreground(BarText).Background(BarBg)
 
 	return Theme{
 		App:        base.Foreground(Text),
 		Header:     base.Foreground(Accent).Bold(true).Padding(0, 1),
 		HeaderName: base.Foreground(Text).Bold(true),
-		StatusBar:  base.Foreground(Muted).Padding(0, 1),
+		Brand:      base.Foreground(Accent).Background(BarBg).Bold(true).Padding(0, 1),
+		StatusBar:  base.Foreground(BarText).Background(BarBg),
 		StatusKey:  base.Foreground(Accent).Bold(true),
 		StatusHint: base.Foreground(Subtle),
+		StatusMode: base.Foreground(AccentOn).Background(Accent).Bold(true).Padding(0, 1),
+
+		BarFill: barFill,
+		BarSeg:  barSeg,
+		BarKey:  base.Foreground(Accent).Background(BarBg).Bold(true),
+		BarHint: base.Foreground(BarText).Background(BarBg),
 
 		Title:    base.Foreground(Accent).Bold(true),
 		Subtitle: base.Foreground(Muted),
@@ -98,7 +143,7 @@ func New() Theme {
 
 		Panel: base.Border(lipgloss.RoundedBorder()).
 			BorderForeground(Border).Padding(0, 1),
-		PanelTitle: base.Foreground(Accent).Bold(true).MarginBottom(1),
+		PanelTitle: base.Foreground(Accent).Bold(true),
 		Modal: base.Border(lipgloss.RoundedBorder()).
 			BorderForeground(Accent).Padding(1, 2),
 		ModalTitle: base.Foreground(Accent).Bold(true).MarginBottom(1),
@@ -106,12 +151,12 @@ func New() Theme {
 			BorderForeground(Danger).Padding(1, 2),
 		Palette: base.Border(lipgloss.RoundedBorder()).
 			BorderForeground(Accent).Padding(0, 1),
-		Selected:    base.Foreground(Accent).Bold(true),
+		Selected:    base.Foreground(SelFg).Background(SelBg).Bold(true),
 		SelectedDim: base.Foreground(Text),
-		Tab:         base.Foreground(Muted).Padding(0, 2),
-		TabActive:   base.Foreground(Accent).Bold(true).Padding(0, 2).Underline(true),
+		Tab:         base.Foreground(BarText).Background(BarBg).Padding(0, 2),
+		TabActive:   base.Foreground(AccentOn).Background(Accent).Bold(true).Padding(0, 2),
 
-		BadgePro:       badge.Foreground(lipgloss.Color("#FFFFFF")).Background(Accent),
+		BadgePro:       badge.Foreground(AccentOn).Background(Accent),
 		BadgeProtected: badge.Foreground(Warning),
 		BadgeOK:        base.Foreground(Success).Bold(true),
 		BadgeDown:      base.Foreground(Danger).Bold(true),
@@ -127,6 +172,7 @@ func New() Theme {
 
 // Glyphs used across views. Kept here so the visual language stays consistent.
 const (
+	GlyphLogo      = "◈"
 	GlyphOK        = "✓"
 	GlyphDown      = "✕"
 	GlyphPending   = "⋯"
@@ -135,4 +181,5 @@ const (
 	GlyphWatching  = "●"
 	GlyphDrift     = "⚠"
 	GlyphArrow     = "›"
+	GlyphDot       = "•"
 )

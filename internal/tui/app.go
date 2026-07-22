@@ -1606,7 +1606,8 @@ func (m Model) View() string {
 		return ""
 	}
 	if m.width == 0 || m.height == 0 {
-		return "Starting OpenPort…"
+		return m.theme.Accent.Render(styles.GlyphLogo+" openport") +
+			m.theme.Faint.Render("  starting…")
 	}
 
 	header := m.renderHeader()
@@ -1665,11 +1666,24 @@ func (m Model) renderHeader() string {
 		m.headerTabs(false, false), // numbers, with the active one named
 	} {
 		if lipgloss.Width(candidate) <= m.width {
-			return candidate
+			return m.fillBar(candidate)
 		}
 	}
 	// Nothing fits: at least say where we are.
-	return truncateLine(m.theme.TabActive.Render(m.route.String()), m.width)
+	return m.fillBar(truncateLine(m.theme.TabActive.Render(m.route.String()), m.width))
+}
+
+// fillBar pads bar content out to the full terminal width with the chrome
+// surface colour, so the top and bottom strips read as solid bars rather than
+// styled text floating on the terminal's own background. Each segment already
+// bakes that colour in (Lip Gloss will not repaint a background across nested
+// reset codes), and this closes the gap on the right.
+func (m Model) fillBar(content string) string {
+	gap := m.width - lipgloss.Width(content)
+	if gap <= 0 {
+		return truncateLine(content, m.width)
+	}
+	return content + m.theme.BarFill.Render(strings.Repeat(" ", gap))
 }
 
 // headerTabs builds one tier of the strip.
@@ -1684,7 +1698,7 @@ func (m Model) headerTabs(brand, labels bool) string {
 
 	parts := make([]string, 0, len(msg.AllRoutes)+1)
 	if brand {
-		parts = append(parts, m.theme.Header.Render("openport"))
+		parts = append(parts, m.theme.Brand.Render(styles.GlyphLogo+" openport"))
 	}
 
 	for i, route := range msg.AllRoutes {

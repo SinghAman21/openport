@@ -365,6 +365,9 @@ func (v *PortsView) handleKey(keyMsg tea.KeyMsg) (View, tea.Cmd) {
 	if v.filtering {
 		switch keyMsg.String() {
 		case "enter":
+			// Commit: keep the query but hand the keyboard back to the table, so
+			// the single-key actions (kill, protect, alias) work on the match
+			// without clearing the search first.
 			v.filtering = false
 			v.filterInput.Blur()
 			return v, nil
@@ -374,6 +377,13 @@ func (v *PortsView) handleKey(keyMsg tea.KeyMsg) (View, tea.Cmd) {
 			v.filterInput.SetValue("")
 			v.rebuild()
 			return v, nil
+		case "up", "down", "pgup", "pgdown", "home", "end":
+			// Move through the matches while still typing — a search box that
+			// locks out navigation until you exit it is barely a search box.
+			var cmd tea.Cmd
+			v.table, cmd = v.table.Update(keyMsg)
+			v.rememberSelection()
+			return v, cmd
 		}
 		input, cmd := v.filterInput.Update(keyMsg)
 		v.filterInput = input
@@ -803,7 +813,13 @@ func (v *PortsView) headerLine(width int) string {
 	if v.sortDesc {
 		arrow = "↓"
 	}
-	right := v.theme.Faint.Render("sort: " + sortNames[v.sortBy] + " " + arrow)
+	// Advertise the search up front — the one affordance a keyboard-first table
+	// most needs and the one a newcomer is least likely to guess.
+	right := ""
+	if v.filterInput.Value() == "" {
+		right += v.theme.Faint.Render("press / to search") + "    "
+	}
+	right += v.theme.Faint.Render("sort: " + sortNames[v.sortBy] + " " + arrow)
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {

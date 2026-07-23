@@ -358,20 +358,34 @@ func groupForm(existing model.Group) *components.Form {
 	})
 }
 
-func blueprintForm() *components.Form {
-	return components.NewForm(formBlueprint, "New blueprint", []components.FormField{
+func blueprintForm(existing model.Blueprint) *components.Form {
+	title := "New blueprint"
+	if existing.Name != "" {
+		title = "Edit blueprint " + existing.Name
+	}
+	services := ""
+	if len(existing.Services) > 0 {
+		parts := make([]string, 0, len(existing.Services))
+		for _, s := range existing.Services {
+			parts = append(parts, s.Name+":"+strconv.Itoa(s.Port))
+		}
+		services = strings.Join(parts, ", ")
+	}
+	return components.NewForm(formBlueprint, title, []components.FormField{
 		{
 			Key:         "name",
 			Title:       "Name",
 			Placeholder: "web",
+			Value:       existing.Name,
 			Validate:    validateName,
 		},
-		{Key: "description", Title: "Description", Description: "Optional."},
+		{Key: "description", Title: "Description", Description: "Optional.", Value: existing.Description},
 		{
 			Key:         "services",
 			Title:       "Services",
 			Description: "name:port pairs, e.g. api:8080, db:5432, cache:6379",
 			Placeholder: "api:8080, db:5432",
+			Value:       services,
 			Validate:    validateServiceList,
 		},
 	})
@@ -389,7 +403,11 @@ func pickerForm(id, title, prompt string, options []string) *components.Form {
 	}})
 }
 
-func projectConfigForm(cfg model.ProjectConfig, dir string) *components.Form {
+// blueprintNoneOption is the "no blueprint" choice in the project-config
+// picker. It round-trips back to an empty Blueprint field.
+const blueprintNoneOption = "(none)"
+
+func projectConfigForm(cfg model.ProjectConfig, dir string, blueprints []string) *components.Form {
 	expected := ""
 	if len(cfg.ExpectedPorts) > 0 {
 		parts := make([]string, 0, len(cfg.ExpectedPorts))
@@ -418,6 +436,31 @@ func projectConfigForm(cfg model.ProjectConfig, dir string) *components.Form {
 		name = defaultProjectName(dir)
 	}
 
+	// The blueprint field is a dropdown of what you have actually defined, so a
+	// project can only ever point at a blueprint that exists — no more typing a
+	// name and hoping it matches. It falls back to a free-text field only when
+	// there are no blueprints yet, so the config is still editable from a clean
+	// slate.
+	blueprintField := components.FormField{
+		Key:         "blueprint",
+		Title:       "Blueprint",
+		Description: "Optional: the blueprint this project follows.",
+		Value:       cfg.Blueprint,
+	}
+	if len(blueprints) > 0 {
+		options := append([]string{blueprintNoneOption}, blueprints...)
+		selected := blueprintNoneOption
+		for _, name := range blueprints {
+			if name == cfg.Blueprint {
+				selected = cfg.Blueprint
+				break
+			}
+		}
+		blueprintField.Kind = components.FieldSelect
+		blueprintField.Options = options
+		blueprintField.Value = selected
+	}
+
 	return components.NewForm(formProjectConfig, model.ProjectConfigFile, []components.FormField{
 		{
 			Key:      "name",
@@ -441,12 +484,7 @@ func projectConfigForm(cfg model.ProjectConfig, dir string) *components.Form {
 			Value:       aliases,
 			Validate:    validateAliasList,
 		},
-		{
-			Key:         "blueprint",
-			Title:       "Blueprint",
-			Description: "Optional: the blueprint this project follows.",
-			Value:       cfg.Blueprint,
-		},
+		blueprintField,
 	})
 }
 

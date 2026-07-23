@@ -102,8 +102,12 @@ func (v *ActionsView) Update(message tea.Msg) (View, tea.Cmd) {
 		return v, nil
 	}
 
-	// Enter means "run this" only when the list is not accepting a query.
-	if key.Matches(keyMsg, actionsKeys.run) && !v.list.SettingFilter() {
+	filtering := v.list.SettingFilter()
+
+	// Enter runs the highlighted action whether or not a search is in progress,
+	// so filtering to an action and launching it is one uninterrupted move
+	// rather than "commit the filter, then press enter again".
+	if key.Matches(keyMsg, actionsKeys.run) {
 		item, runnable := v.Current()
 		if !runnable {
 			if item.Badge == "PRO" {
@@ -112,6 +116,19 @@ func (v *ActionsView) Update(message tea.Msg) (View, tea.Cmd) {
 			return v, nil
 		}
 		return v, emit(msg.RunActionMsg{ID: item.ID})
+	}
+
+	// bubbles/list disables its cursor keys while filtering; re-enable ↑/↓ so a
+	// match can be picked without first committing the query.
+	if filtering {
+		switch keyMsg.String() {
+		case "up":
+			v.list.CursorUp()
+			return v, nil
+		case "down":
+			v.list.CursorDown()
+			return v, nil
+		}
 	}
 
 	updated, cmd := v.list.Update(keyMsg)
@@ -126,14 +143,24 @@ const compactBelowHeight = 22
 
 // View implements View.
 func (v *ActionsView) View(width, height int) string {
+	// A one-line header advertises the search up front, the same way the ports
+	// and history screens do, so the filter is discoverable without hunting the
+	// status bar for it.
+	header := v.theme.Subtitle.Render("Everything OpenPort can do") +
+		v.theme.Faint.Render("    press / to search")
+	listHeight := height - 1
+	if listHeight < 3 {
+		listHeight = 3
+	}
+
 	// Swap the delegate rather than clipping: the list keeps its filtering,
 	// pagination and counter either way, it just fits more per page.
-	compact := height < compactBelowHeight
+	compact := listHeight < compactBelowHeight
 	if compact != v.compact {
 		v.compact = compact
 		v.list.SetDelegate(components.NewDelegate(v.theme, compact))
 	}
 
-	v.list.SetSize(width, height)
-	return v.list.View()
+	v.list.SetSize(width, listHeight)
+	return header + "\n" + v.list.View()
 }

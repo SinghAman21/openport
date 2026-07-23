@@ -1,0 +1,8 @@
+# OpenPort project config — https://github.com/SinghAman21/openport
+name: openport-test
+expected_ports:
+    - 3000
+    - 5432
+aliases:
+    web: 3000
+blueprint: web

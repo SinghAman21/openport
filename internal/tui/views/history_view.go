@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -22,6 +23,10 @@ const (
 	tabLogs
 )
 
+// historyTabCount is how many sub-tabs the view cycles through, so Tab wraps
+// from the last back to the first instead of dead-ending.
+const historyTabCount = 2
+
 // timeFormat is the timestamp format used across both panes.
 const timeFormat = "15:04:05"
 
@@ -31,8 +36,17 @@ type HistoryView struct {
 	theme styles.Theme
 	tab   historyTab
 
-	history []model.HistoryEntry
-	logs    []model.LogEntry
+	// Full data as loaded; the filtered projections are what the panes render.
+	history  []model.HistoryEntry
+	logs     []model.LogEntry
+	fHistory []model.HistoryEntry
+	fLogs    []model.LogEntry
+
+	// One filter box serves both panes: the query persists as you switch
+	// between History and Logs, so "everything about port 3000" stays narrowed
+	// whichever pane you look at it in.
+	filterInput textinput.Model
+	filtering   bool
 
 	tbl viewport.Model
 	// historyTable renders the structured audit entries.
@@ -53,9 +67,15 @@ func NewHistoryView(theme styles.Theme) *HistoryView {
 	t := table.New(table.WithColumns(cols), table.WithFocused(true))
 	t.SetStyles(tableStyles(theme))
 
+	filter := textinput.New()
+	filter.Prompt = "/"
+	filter.Placeholder = "filter by action, summary, source or message"
+	filter.CharLimit = 48
+
 	return &HistoryView{
 		theme: theme, historyTable: t, historyCols: cols,
-		tbl: viewport.New(0, 0),
+		tbl:         viewport.New(0, 0),
+		filterInput: filter,
 	}
 }
 
@@ -68,23 +88,41 @@ func (v *HistoryView) Title() string {
 }
 
 var historyKeys = struct {
-	nextTab, prevTab key.Binding
+	nextTab, prevTab, filter key.Binding
 }{
-	nextTab: key.NewBinding(key.WithKeys("tab", "right", "l"), key.WithHelp("tab", "logs")),
-	prevTab: key.NewBinding(key.WithKeys("shift+tab", "left", "h"), key.WithHelp("shift+tab", "history")),
+	nextTab: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "logs")),
+	prevTab: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "history")),
+	filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 }
 
 // Help implements View.
 func (v *HistoryView) Help() []key.Binding {
-	return []key.Binding{historyKeys.nextTab, historyKeys.prevTab}
+	return []key.Binding{historyKeys.filter, historyKeys.nextTab, historyKeys.prevTab}
 }
+
+// CapturingInput tells the root model the filter box has the keyboard, so
+// global single-letter bindings and section switching do not fire while typing.
+func (v *HistoryView) CapturingInput() bool { return v.filtering }
 
 // SelectionSummary feeds the status bar.
 func (v *HistoryView) SelectionSummary() string {
 	if v.tab == tabLogs {
-		return strconv.Itoa(len(v.logs)) + " lines"
+		return countLabel(len(v.fLogs), len(v.logs), "line", "lines")
 	}
-	return strconv.Itoa(len(v.history)) + " entries"
+	return countLabel(len(v.fHistory), len(v.history), "entry", "entries")
+}
+
+// countLabel renders "N entries", or "N of M entries" when a filter is hiding
+// some of them.
+func countLabel(shown, total int, one, many string) string {
+	noun := many
+	if shown == 1 {
+		noun = one
+	}
+	if shown != total {
+		return strconv.Itoa(shown) + " of " + strconv.Itoa(total) + " " + many
+	}
+	return strconv.Itoa(shown) + " " + noun
 }
 
 // ShowLogs switches to the logs pane.
@@ -99,36 +137,132 @@ func (v *HistoryView) Update(message tea.Msg) (View, tea.Cmd) {
 	case msg.DataLoadedMsg:
 		if m.Err == nil {
 			v.history, v.logs = m.History, m.Logs
-			v.rebuild()
-			v.render()
+			v.applyFilter()
 		}
 		return v, nil
 
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(m, historyKeys.nextTab):
-			v.tab = tabLogs
-			v.render()
-			return v, nil
-		case key.Matches(m, historyKeys.prevTab):
-			v.tab = tabHistory
-			return v, nil
-		}
-		if v.tab == tabLogs {
-			vp, cmd := v.tbl.Update(m)
-			v.tbl = vp
-			return v, cmd
-		}
-		t, cmd := v.historyTable.Update(m)
-		v.historyTable = t
-		return v, cmd
+		return v.handleKey(m)
 	}
 	return v, nil
 }
 
-func (v *HistoryView) rebuild() {
-	rows := make([]table.Row, 0, len(v.history))
+// handleKey routes a keypress, with the filter box taking precedence while it
+// is focused.
+func (v *HistoryView) handleKey(keyMsg tea.KeyMsg) (View, tea.Cmd) {
+	if v.filtering {
+		switch keyMsg.String() {
+		case "enter":
+			v.filtering = false
+			v.filterInput.Blur()
+			return v, nil
+		case "esc":
+			v.filtering = false
+			v.filterInput.Blur()
+			v.filterInput.SetValue("")
+			v.applyFilter()
+			return v, nil
+		case "up", "down", "pgup", "pgdown", "home", "end":
+			// Scroll the results without leaving the search box.
+			return v.scrollActive(keyMsg)
+		}
+		input, cmd := v.filterInput.Update(keyMsg)
+		v.filterInput = input
+		v.applyFilter()
+		return v, cmd
+	}
+
+	switch {
+	case key.Matches(keyMsg, historyKeys.filter):
+		v.filtering = true
+		return v, v.filterInput.Focus()
+	case key.Matches(keyMsg, historyKeys.nextTab):
+		v.tab = (v.tab + 1) % historyTabCount
+		v.render()
+		return v, nil
+	case key.Matches(keyMsg, historyKeys.prevTab):
+		v.tab = (v.tab + historyTabCount - 1) % historyTabCount
+		v.render()
+		return v, nil
+	}
+
+	return v.scrollActive(keyMsg)
+}
+
+// scrollActive forwards a motion key to whichever pane is currently showing.
+func (v *HistoryView) scrollActive(keyMsg tea.KeyMsg) (View, tea.Cmd) {
+	if v.tab == tabLogs {
+		vp, cmd := v.tbl.Update(keyMsg)
+		v.tbl = vp
+		return v, cmd
+	}
+	t, cmd := v.historyTable.Update(keyMsg)
+	v.historyTable = t
+	return v, cmd
+}
+
+// applyFilter recomputes both filtered projections from the current query and
+// refreshes whichever pane is showing.
+func (v *HistoryView) applyFilter() {
+	q := strings.ToLower(strings.TrimSpace(v.filterInput.Value()))
+
+	v.fHistory = v.fHistory[:0]
 	for _, e := range v.history {
+		if matchesHistory(e, q) {
+			v.fHistory = append(v.fHistory, e)
+		}
+	}
+	v.fLogs = v.fLogs[:0]
+	for _, e := range v.logs {
+		if matchesLog(e, q) {
+			v.fLogs = append(v.fLogs, e)
+		}
+	}
+
+	v.rebuild()
+	v.render()
+}
+
+// matchesHistory reports whether an audit entry matches the filter query.
+func matchesHistory(e model.HistoryEntry, q string) bool {
+	if q == "" {
+		return true
+	}
+	for _, h := range []string{
+		strings.ToLower(string(e.Kind)),
+		strings.ToLower(e.Summary),
+		strings.ToLower(e.Detail),
+		strings.ToLower(e.Err),
+		e.At.Format(timeFormat),
+	} {
+		if h != "" && strings.Contains(h, q) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesLog reports whether a log line matches the filter query.
+func matchesLog(e model.LogEntry, q string) bool {
+	if q == "" {
+		return true
+	}
+	for _, h := range []string{
+		strings.ToLower(string(e.Level)),
+		strings.ToLower(e.Source),
+		strings.ToLower(e.Message),
+		e.At.Format(timeFormat),
+	} {
+		if h != "" && strings.Contains(h, q) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *HistoryView) rebuild() {
+	rows := make([]table.Row, 0, len(v.fHistory))
+	for _, e := range v.fHistory {
 		// Plain text only — see the note on PortsView.row.
 		mark := styles.GlyphOK
 		if !e.Success {
@@ -146,7 +280,7 @@ func (v *HistoryView) rebuild() {
 			detail,
 		})
 	}
-	v.historyTable.SetRows(rows)
+	setRows(&v.historyTable, rows)
 }
 
 // render rebuilds the scrollable log body.
@@ -154,7 +288,12 @@ func (v *HistoryView) render() {
 	if v.tab != tabLogs {
 		return
 	}
-	if len(v.logs) == 0 {
+	if len(v.fLogs) == 0 {
+		if v.filterInput.Value() != "" {
+			v.tbl.SetContent(v.theme.Faint.Render(
+				"No log lines match " + strconv.Quote(v.filterInput.Value()) + "."))
+			return
+		}
 		v.tbl.SetContent(v.theme.Faint.Render(
 			"No log entries. Anything OpenPort could not do — a permission error, a\n" +
 				"procfs fallback, a probe that timed out — shows up here."))
@@ -162,7 +301,7 @@ func (v *HistoryView) render() {
 	}
 
 	var b strings.Builder
-	for _, e := range v.logs {
+	for _, e := range v.fLogs {
 		style := v.theme.Faint
 		switch e.Level {
 		case model.LogError:
@@ -183,6 +322,7 @@ func (v *HistoryView) render() {
 // View implements View.
 func (v *HistoryView) View(width, height int) string {
 	tabs := tabBar(int(v.tab), []string{"History", "Logs"}, v.theme.TabActive, v.theme.Tab)
+	head := v.headerLine(tabs)
 
 	bodyHeight := height - 3
 	if bodyHeight < 3 {
@@ -195,16 +335,32 @@ func (v *HistoryView) View(width, height int) string {
 			v.render()
 			v.ready = true
 		}
-		return tabs + "\n\n" + v.tbl.View()
+		return head + "\n\n" + v.tbl.View()
 	}
 
 	if len(v.history) == 0 {
-		return tabs + "\n\n" + v.theme.Faint.Render(
+		return head + "\n\n" + v.theme.Faint.Render(
 			"Nothing yet. Every kill, suggestion, reservation and blueprint apply is\n"+
 				"recorded here with a timestamp, so you can always answer \"what did I "+
 				"just do?\".")
 	}
+	if len(v.fHistory) == 0 {
+		return head + "\n\n" + v.theme.Faint.Render(
+			"No entries match "+strconv.Quote(v.filterInput.Value())+". Press esc to clear the filter.")
+	}
 
 	fitTable(&v.historyTable, v.historyCols, width, bodyHeight)
-	return tabs + "\n\n" + v.historyTable.View()
+	return head + "\n\n" + v.historyTable.View()
+}
+
+// headerLine puts the sub-tab strip and the filter side by side, so searching
+// never costs a row of the pane below.
+func (v *HistoryView) headerLine(tabs string) string {
+	if v.filtering {
+		return tabs + "  " + v.filterInput.View()
+	}
+	if q := v.filterInput.Value(); q != "" {
+		return tabs + "  " + v.theme.Accent.Render("/"+q)
+	}
+	return tabs + "  " + v.theme.Faint.Render("press / to search")
 }

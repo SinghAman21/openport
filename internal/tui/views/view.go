@@ -28,6 +28,21 @@ type View interface {
 	Title() string
 }
 
+// setRows installs rows and keeps the cursor on a real row.
+//
+// bubbles/table starts its cursor at 0, but the first time it is handed an empty
+// set, SetRows clamps the cursor to len(rows)-1 = -1 — and never lifts it back
+// when rows later arrive. A view that renders empty before its data loads (the
+// blueprints table rebuilds on the first ports poll, say) is left with a cursor
+// of -1 forever, so every selection-driven key — edit, delete, apply — silently
+// does nothing. Nudging the cursor back onto row 0 is what keeps those keys live.
+func setRows(t *table.Model, rows []table.Row) {
+	t.SetRows(rows)
+	if len(rows) > 0 && t.Cursor() < 0 {
+		t.SetCursor(0)
+	}
+}
+
 // fitTable sizes a table to the available width, scaling its columns down
 // proportionally when they do not fit. bubbles/table does not reflow on its
 // own, so without this a fixed column set renders wider than the terminal in a

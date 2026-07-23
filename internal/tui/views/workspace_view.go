@@ -55,20 +55,22 @@ func (v *WorkspaceView) Title() string { return "Workspace" }
 func (v *WorkspaceView) SetPro(isPro bool) { v.isPro = isPro }
 
 var workspaceKeys = struct {
-	login, refresh, push, pull, drift key.Binding
+	login, workspaces, selectWS, refresh, push, pull, drift key.Binding
 }{
-	login:   key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "sign in")),
-	refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh registry")),
-	push:    key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "push")),
-	pull:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "pull")),
-	drift:   key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "detect drift")),
+	login:      key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "sign in")),
+	workspaces: key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "load workspaces")),
+	selectWS:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "select workspace")),
+	refresh:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh registry")),
+	push:       key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "push")),
+	pull:       key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "pull")),
+	drift:      key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "detect drift")),
 }
 
 // Help implements View.
 func (v *WorkspaceView) Help() []key.Binding {
 	return []key.Binding{
-		workspaceKeys.login, workspaceKeys.refresh,
-		workspaceKeys.push, workspaceKeys.pull, workspaceKeys.drift,
+		workspaceKeys.login, workspaceKeys.workspaces, workspaceKeys.selectWS,
+		workspaceKeys.refresh, workspaceKeys.push, workspaceKeys.pull, workspaceKeys.drift,
 	}
 }
 
@@ -122,6 +124,10 @@ func (v *WorkspaceView) Update(message tea.Msg) (View, tea.Cmd) {
 		switch {
 		case key.Matches(m, workspaceKeys.login):
 			return v, emit(msg.RunActionMsg{ID: actions.ProLogin})
+		case key.Matches(m, workspaceKeys.workspaces):
+			return v, emit(msg.RunActionMsg{ID: actions.ProWorkspaces})
+		case key.Matches(m, workspaceKeys.selectWS):
+			return v, emit(msg.RunActionMsg{ID: actions.ProSelectWorkspace})
 		case key.Matches(m, workspaceKeys.refresh):
 			return v, emit(msg.LoadRegistryMsg{})
 		case key.Matches(m, workspaceKeys.push):
@@ -163,7 +169,7 @@ func (v *WorkspaceView) rebuild() {
 			})
 		}
 	}
-	v.tbl.SetRows(rows)
+	setRows(&v.tbl, rows)
 }
 
 // View implements View.

@@ -61,6 +61,22 @@ func (p *Palette) Update(message tea.Msg) (*Palette, tea.Cmd) {
 	if !p.open {
 		return p, nil
 	}
+
+	// The palette lives permanently in the list's Filtering state, where
+	// bubbles/list disables its own cursor keys so keystrokes narrow the query.
+	// Drive the selection manually so ↑/↓ pick a match while you keep typing —
+	// otherwise the arrows are dead exactly when they are most wanted.
+	if keyMsg, ok := message.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
+		case "up":
+			p.list.CursorUp()
+			return p, nil
+		case "down":
+			p.list.CursorDown()
+			return p, nil
+		}
+	}
+
 	updated, cmd := p.list.Update(message)
 	p.list = updated
 

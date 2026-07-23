@@ -51,12 +51,13 @@ const (
 	UIQuit    = "ui.quit"
 
 	// Pro
-	ProLogin      = "pro.login"
-	ProWorkspaces = "pro.workspaces"
-	ProPush       = "pro.push"
-	ProPull       = "pro.pull"
-	ProRegistry   = "pro.registry"
-	ProDrift      = "pro.drift"
+	ProLogin           = "pro.login"
+	ProWorkspaces      = "pro.workspaces"
+	ProSelectWorkspace = "pro.workspaces.select"
+	ProPush            = "pro.push"
+	ProPull            = "pro.pull"
+	ProRegistry        = "pro.registry"
+	ProDrift           = "pro.drift"
 )
 
 // Category groups actions in the menu and palette.
@@ -132,7 +133,8 @@ var catalog = []Action{
 
 	// Pro
 	{ID: ProLogin, Title: "Sign in", Desc: "Connect a workspace with GitHub or Google", Category: CatPro, Pro: true},
-	{ID: ProWorkspaces, Title: "Workspaces", Desc: "Pick the team workspace to sync with", Category: CatPro, Key: "7", Pro: true},
+	{ID: ProWorkspaces, Title: "Workspaces", Desc: "List and refresh the team workspaces you can sync with", Category: CatPro, Key: "7", Pro: true},
+	{ID: ProSelectWorkspace, Title: "Select workspace", Desc: "Choose which workspace push, pull and drift target", Category: CatPro, Pro: true},
 	{ID: ProPush, Title: "Push to cloud", Desc: "Upload aliases, groups and blueprints", Category: CatPro, Pro: true},
 	{ID: ProPull, Title: "Pull from cloud", Desc: "Replace local state with the workspace snapshot", Category: CatPro, Pro: true},
 	{ID: ProRegistry, Title: "Team registry", Desc: "Who runs which service, and where", Category: CatPro, Pro: true},

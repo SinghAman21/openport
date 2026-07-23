@@ -24,6 +24,9 @@ const (
 	tabProtected
 )
 
+// configTabCount lets Tab cycle the sub-tabs and wrap from the last to the first.
+const configTabCount = 2
+
 // ConfigView shows the per-project .openport.yml and the never-kill list, and
 // lets you edit both without leaving the tool.
 type ConfigView struct {
@@ -57,8 +60,8 @@ var configKeys = struct {
 	edit:    key.NewBinding(key.WithKeys("e", "enter"), key.WithHelp("e", "edit")),
 	initCfg: key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "create config")),
 	protect: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "protect a port")),
-	nextTab: key.NewBinding(key.WithKeys("tab", "right", "l"), key.WithHelp("tab", "next tab")),
-	prevTab: key.NewBinding(key.WithKeys("shift+tab", "left", "h"), key.WithHelp("shift+tab", "prev tab")),
+	nextTab: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "project/protected")),
+	prevTab: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "project/protected")),
 }
 
 // Help implements View.
@@ -102,11 +105,11 @@ func (v *ConfigView) Update(message tea.Msg) (View, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(m, configKeys.nextTab):
-			v.tab = tabProtected
+			v.tab = (v.tab + 1) % configTabCount
 			v.render()
 			return v, nil
 		case key.Matches(m, configKeys.prevTab):
-			v.tab = tabProject
+			v.tab = (v.tab + configTabCount - 1) % configTabCount
 			v.render()
 			return v, nil
 		case key.Matches(m, configKeys.protect):

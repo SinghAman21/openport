@@ -72,6 +72,8 @@ type Model struct {
 	// groups and blueprints back the pickers.
 	groups     []model.Group
 	blueprints []model.Blueprint
+	// workspaces is the Pro workspace list, kept so the picker can offer it.
+	workspaces []opsync.Workspace
 	project    model.ProjectConfig
 	hasProject bool
 
@@ -313,6 +315,16 @@ func (m Model) handleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Hand the terminal back to the shell; ResumeMsg refreshes on return.
 		return m, tea.Suspend
 
+	// ←/→ walk the top-level sections along the header strip, the same order the
+	// number keys jump to. This is caught globally, before the active view, so a
+	// view's own left/right (list pagination, sub-tab toggles) never shadows the
+	// primary way to move between screens. Sub-tabs move on Tab/Shift+Tab, which
+	// stay with the view.
+	case key.Matches(keyMsg, m.keys.Left):
+		return m.navigate(stepRoute(m.route, -1))
+	case key.Matches(keyMsg, m.keys.Right):
+		return m.navigate(stepRoute(m.route, +1))
+
 	case key.Matches(keyMsg, m.keys.GotoPorts):
 		return m.navigate(msg.RoutePorts)
 	case key.Matches(keyMsg, m.keys.GotoActions):
@@ -541,6 +553,9 @@ func (m Model) handleMessage(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if group, ok := views.EditGroupRequest(message); ok {
 		return m.openModal(groupForm(group))
+	}
+	if bp, ok := views.EditBlueprintRequest(message); ok {
+		return m.openModal(blueprintForm(bp))
 	}
 	return m.broadcastAll(message)
 }
@@ -833,6 +848,9 @@ func (m Model) onProResult(message tea.Msg) (tea.Model, tea.Cmd) {
 		err = t.Err
 	case msg.WorkspacesMsg:
 		err = t.Err
+		if t.Err == nil {
+			m.workspaces = t.Workspaces
+		}
 	}
 	if err == nil {
 		return m, cmd
@@ -1206,16 +1224,20 @@ func (m Model) handleFormResult(t msg.FormResultMsg) (tea.Model, tea.Cmd) {
 		return m, loginCmd(m.provider, provider)
 
 	case formWorkspace:
-		return m, selectWorkspaceCmd(m.provider, v["choice"])
+		return m, selectWorkspaceCmd(m.provider, m.workspaceIDByName(v["choice"]))
 	}
 
 	return m, nil
 }
 
 func (m Model) projectConfigFromForm(v map[string]string) (model.ProjectConfig, error) {
+	blueprint := strings.TrimSpace(v["blueprint"])
+	if blueprint == blueprintNoneOption {
+		blueprint = ""
+	}
 	cfg := model.ProjectConfig{
 		Name:      strings.TrimSpace(v["name"]),
-		Blueprint: strings.TrimSpace(v["blueprint"]),
+		Blueprint: blueprint,
 	}
 	if raw := strings.TrimSpace(v["expected"]); raw != "" {
 		list, err := parsePortList(raw)
@@ -1300,7 +1322,7 @@ func (m Model) runAction(id string) (tea.Model, tea.Cmd) {
 	case actions.BlueprintList:
 		return m.navigate(msg.RouteBlueprints)
 	case actions.BlueprintNew:
-		return m.openModal(blueprintForm())
+		return m.openModal(blueprintForm(model.Blueprint{}))
 	case actions.BlueprintApply:
 		return m.openBlueprintPicker()
 
@@ -1308,11 +1330,11 @@ func (m Model) runAction(id string) (tea.Model, tea.Cmd) {
 	case actions.ConfigView:
 		m.configView.ShowProject()
 		if m.hasProject {
-			return m.openModal(projectConfigForm(m.project, m.workDir))
+			return m.openModal(projectConfigForm(m.project, m.workDir, m.blueprintNames()))
 		}
 		return m.navigate(msg.RouteConfig)
 	case actions.ConfigInit:
-		return m.openModal(projectConfigForm(model.ProjectConfig{}, m.workDir))
+		return m.openModal(projectConfigForm(model.ProjectConfig{}, m.workDir, m.blueprintNames()))
 
 	// History & safety
 	case actions.HistoryView:
@@ -1346,6 +1368,8 @@ func (m Model) runAction(id string) (tea.Model, tea.Cmd) {
 	case actions.ProWorkspaces:
 		model, cmd := m.navigate(msg.RouteWorkspace)
 		return model, tea.Batch(cmd, workspacesCmd(m.provider))
+	case actions.ProSelectWorkspace:
+		return m.openWorkspacePicker()
 	case actions.ProPush:
 		return m, pushCmd(m.provider, m.store)
 	case actions.ProPull:
@@ -1372,16 +1396,48 @@ func (m Model) openGroupPicker(formID, title string) (tea.Model, tea.Cmd) {
 	return m.openModal(pickerForm(formID, title, "Group", names))
 }
 
+// openWorkspacePicker offers the loaded Pro workspaces so the user can choose
+// which one push, pull, registry and drift act against. The list is populated
+// by ProWorkspaces; without it there is nothing to pick.
+func (m Model) openWorkspacePicker() (tea.Model, tea.Cmd) {
+	if len(m.workspaces) == 0 {
+		return m.withToast(msg.Warn("No workspaces loaded yet — press 7 to load them"))
+	}
+	names := make([]string, 0, len(m.workspaces))
+	for _, w := range m.workspaces {
+		names = append(names, w.Name)
+	}
+	sort.Strings(names)
+	return m.openModal(pickerForm(formWorkspace, "Select workspace", "Workspace", names))
+}
+
+// workspaceIDByName resolves a picked workspace name back to its ID. Names are
+// what the user sees; IDs are what the API addresses.
+func (m Model) workspaceIDByName(name string) string {
+	for _, w := range m.workspaces {
+		if w.Name == name {
+			return w.ID
+		}
+	}
+	return name // fall back to the literal, so a mismatch still reaches the server
+}
+
 func (m Model) openBlueprintPicker() (tea.Model, tea.Cmd) {
 	if len(m.blueprints) == 0 {
 		return m.withToast(msg.Warn("No blueprints defined yet — press 4 then n to make one"))
 	}
+	return m.openModal(pickerForm(formBlueprintApply, "Apply a blueprint", "Blueprint", m.blueprintNames()))
+}
+
+// blueprintNames returns the saved blueprint names, sorted, for the pickers and
+// the project-config dropdown.
+func (m Model) blueprintNames() []string {
 	names := make([]string, 0, len(m.blueprints))
 	for _, bp := range m.blueprints {
 		names = append(names, bp.Name)
 	}
 	sort.Strings(names)
-	return m.openModal(pickerForm(formBlueprintApply, "Apply a blueprint", "Blueprint", names))
+	return names
 }
 
 // --- watch mode ----------------------------------------------------------
@@ -1413,6 +1469,18 @@ func (m Model) toggleWatch() (tea.Model, tea.Cmd) {
 }
 
 // --- helpers -------------------------------------------------------------
+
+// stepRoute returns the section delta places from r along AllRoutes, wrapping
+// at both ends so ←/→ cycle rather than dead-end.
+func stepRoute(r msg.Route, delta int) msg.Route {
+	routes := msg.AllRoutes
+	for i, rr := range routes {
+		if rr == r {
+			return routes[((i+delta)%len(routes)+len(routes))%len(routes)]
+		}
+	}
+	return r
+}
 
 func (m Model) navigate(to msg.Route) (tea.Model, tea.Cmd) {
 	if _, ok := m.views[to]; !ok {

@@ -66,16 +66,28 @@ func NewBlueprintsView(theme styles.Theme) *BlueprintsView {
 func (v *BlueprintsView) Title() string { return "Blueprints" }
 
 var blueprintKeys = struct {
-	apply, newItem, del key.Binding
+	apply, newItem, edit, del key.Binding
 }{
 	apply:   key.NewBinding(key.WithKeys("a", "enter"), key.WithHelp("a", "apply")),
 	newItem: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new")),
+	edit:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
 	del:     key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
 }
 
 // Help implements View.
 func (v *BlueprintsView) Help() []key.Binding {
-	return []key.Binding{blueprintKeys.apply, blueprintKeys.newItem, blueprintKeys.del}
+	return []key.Binding{blueprintKeys.apply, blueprintKeys.newItem, blueprintKeys.edit, blueprintKeys.del}
+}
+
+// editBlueprintMsg asks the root model to open a prefilled blueprint form. It
+// lives here because only this view produces it, mirroring the alias and group
+// edit intents.
+type editBlueprintMsg struct{ Blueprint model.Blueprint }
+
+// EditBlueprintRequest exposes the payload of an edit intent to the root model.
+func EditBlueprintRequest(m tea.Msg) (model.Blueprint, bool) {
+	e, ok := m.(editBlueprintMsg)
+	return e.Blueprint, ok
 }
 
 // SelectionSummary feeds the status bar.
@@ -133,6 +145,11 @@ func (v *BlueprintsView) Update(message tea.Msg) (View, tea.Cmd) {
 			return v, nil
 		case key.Matches(m, blueprintKeys.newItem):
 			return v, emit(msg.RunActionMsg{ID: actions.BlueprintNew})
+		case key.Matches(m, blueprintKeys.edit):
+			if bp, ok := v.selected(); ok {
+				return v, emit(editBlueprintMsg{Blueprint: bp})
+			}
+			return v, nil
 		case key.Matches(m, blueprintKeys.del):
 			if bp, ok := v.selected(); ok {
 				return v, emit(msg.DeleteBlueprintMsg{Name: bp.Name})
@@ -209,7 +226,7 @@ func (v *BlueprintsView) rebuild() {
 			bp.Description,
 		})
 	}
-	v.tbl.SetRows(rows)
+	setRows(&v.tbl, rows)
 }
 
 // View implements View.

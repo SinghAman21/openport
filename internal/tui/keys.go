@@ -49,11 +49,11 @@ func DefaultKeyMap() KeyMap {
 		),
 		Left: key.NewBinding(
 			key.WithKeys("left", "h"),
-			key.WithHelp("←/h", "prev tab"),
+			key.WithHelp("←/h", "prev section"),
 		),
 		Right: key.NewBinding(
 			key.WithKeys("right", "l"),
-			key.WithHelp("→/l", "next tab"),
+			key.WithHelp("→/l", "next section"),
 		),
 		Top: key.NewBinding(
 			key.WithKeys("g", "home"),

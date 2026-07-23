@@ -255,10 +255,15 @@ aliases, groups and blueprints across machines; a team registry of who is
 running which service where; drift detection against a shared blueprint; and
 GitHub/Google sign-in from inside the interface.
 
-Pro is enabled by setting `OPENPORT_LICENSE`. In this build the remote calls
-are stubbed — the interface, the gating and the workspace view are complete, so
-turning it on is a single provider swap. Off Pro, those actions stay visible
-with a `PRO` badge and explain themselves rather than vanishing or breaking.
+Pro is enabled by setting `OPENPORT_LICENSE`. With a license present the sync
+provider is a real REST client for the OpenPort cloud: sign-in exchanges the
+license for a session, then push/pull/registry/drift talk to
+`/v1/workspaces/{id}/…` at the endpoint. Point it at a self-hosted or test
+deployment with `OPENPORT_ENDPOINT` (defaults to `https://api.openport.dev`).
+Load the workspaces (`7`), pick the one to sync against (`s` on the Workspace
+screen, or the "Select workspace" action), then push, pull or detect drift. Off
+Pro, those actions stay visible with a `PRO` badge and explain themselves rather
+than vanishing or breaking — and no Free code path ever opens a socket.
 
 ---
 

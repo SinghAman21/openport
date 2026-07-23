@@ -22,6 +22,9 @@ const (
 	tabGroups
 )
 
+// aliasTabCount lets Tab cycle the sub-tabs and wrap from the last to the first.
+const aliasTabCount = 2
+
 // AliasesView manages the two things that give ports names: aliases (one
 // name, one port) and groups (one name, many ports).
 type AliasesView struct {
@@ -77,8 +80,8 @@ var aliasKeys = struct {
 	del:      key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
 	shutdown: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "shut down group")),
 	health:   key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "health check group")),
-	nextTab:  key.NewBinding(key.WithKeys("tab", "right", "l"), key.WithHelp("tab", "next tab")),
-	prevTab:  key.NewBinding(key.WithKeys("shift+tab", "left", "h"), key.WithHelp("shift+tab", "prev tab")),
+	nextTab:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "aliases/groups")),
+	prevTab:  key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "aliases/groups")),
 }
 
 // Help implements View.
@@ -157,10 +160,10 @@ func (v *AliasesView) Update(message tea.Msg) (View, tea.Cmd) {
 func (v *AliasesView) handleKey(keyMsg tea.KeyMsg) (View, tea.Cmd) {
 	switch {
 	case key.Matches(keyMsg, aliasKeys.nextTab):
-		v.SetTab(tabGroups)
+		v.SetTab((v.tab + 1) % aliasTabCount)
 		return v, nil
 	case key.Matches(keyMsg, aliasKeys.prevTab):
-		v.SetTab(tabAliases)
+		v.SetTab((v.tab + aliasTabCount - 1) % aliasTabCount)
 		return v, nil
 	}
 
@@ -252,7 +255,7 @@ func (v *AliasesView) setData(aliases []model.Alias, groups []model.Group) {
 	for _, a := range aliases {
 		aliasRows = append(aliasRows, table.Row{a.Name, strconv.Itoa(a.Port), a.Note})
 	}
-	v.aliasTable.SetRows(aliasRows)
+	setRows(&v.aliasTable, aliasRows)
 
 	groupRows := make([]table.Row, 0, len(groups))
 	for _, g := range groups {
@@ -264,7 +267,7 @@ func (v *AliasesView) setData(aliases []model.Alias, groups []model.Group) {
 			g.Name, strings.Join(parts, ", "), strconv.Itoa(len(g.Ports)),
 		})
 	}
-	v.groupTable.SetRows(groupRows)
+	setRows(&v.groupTable, groupRows)
 	v.focusActive()
 }
 

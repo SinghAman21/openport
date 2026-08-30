@@ -45,7 +45,7 @@
   calls on any Free path.
 - Watch mode refreshes live while remaining fully interactive; selection
   persists.
-- Builds for `GOOS=darwin` and `GOOS=linux` (`make cross`).
+- Builds for `GOOS=darwin`, `GOOS=linux`, and `GOOS=windows` (`make cross`).
 - README documents install, key bindings, palette, config format, and the Free
   vs Pro split.
 

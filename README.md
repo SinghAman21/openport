@@ -31,8 +31,8 @@ make build      # produces ./openport
 make install    # or install into $GOBIN
 ```
 
-Requires Go 1.25+. macOS and Linux are supported. Windows compiles as a
-build-tagged stub — the interface runs, but there is no port provider yet.
+Requires Go 1.25+. macOS, Linux, and Windows are supported. Windows uses the
+native IP Helper and process APIs, so no external port-listing tools are needed.
 
 ---
 

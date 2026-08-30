@@ -1,6 +1,6 @@
 # Build artefacts
 /openport
-/dist/
+*dist/
 
 # Debug output (written by --debug and ctrl+d)
 openport-debug.log
@@ -12,3 +12,4 @@ openport-debug.log
 *.test
 *.out
 coverage.*
+web/node_modules

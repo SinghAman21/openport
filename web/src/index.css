@@ -50,6 +50,22 @@ h1, h2, h3 { text-wrap: balance; }
 .preview-action:active { background: rgba(200,255,97,.16); }
 .preview-action:focus-visible { outline: 2px solid #c8ff61; outline-offset: 2px; }
 .eyebrow { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .15em; color: #c8ff61; }
+.story-canvas { background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 32px 32px; }
+.story-node { box-shadow: 0 16px 30px rgba(0,0,0,.17); }
+.story-node-front { transform-origin: 10% 90%; }
+.story-node-db { transform-origin: 90% 80%; }
+.story-node-cache { transform-origin: 10% 10%; }
+.story-node-api { transform-origin: 85% 15%; }
+.story-control { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; flex-wrap: wrap; gap: 7px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 8px 12px; color: #f5f7f4; font-family: var(--font-mono); font-size: 11px; transition: border-color .2s ease, background-color .2s ease; }
+.story-control:hover { border-color: #c8ff61; background: rgba(200,255,97,.08); }
+.story-control:focus-visible { outline: 2px solid #c8ff61; outline-offset: 2px; }
+.story-control:active { background: rgba(200,255,97,.16); }
+.story-progress { animation: story-progress 4.4s linear both; }
+.story-scan { animation: story-scan 2.4s ease-in-out infinite; }
+@keyframes story-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes story-scan { 0%, 100% { top: 2%; opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 90% { top: 98%; opacity: 0; } }
+.usecase-workflow { background-image: linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px); background-size: 40px 40px; }
+.usecase-progress { animation: story-progress 5s linear both; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

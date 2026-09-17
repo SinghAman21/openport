@@ -24,6 +24,7 @@
 html { scroll-behavior: smooth; overflow-x: hidden; }
 body { margin: 0; min-width: 320px; overflow-x: hidden; }
 button, a { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), summary { cursor: pointer; }
 ::selection { color: #070908; background: #c8ff61; }
 h1, h2, h3 { text-wrap: balance; }
 
@@ -65,7 +66,7 @@ h1, h2, h3 { text-wrap: balance; }
 @keyframes story-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes story-scan { 0%, 100% { top: 2%; opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 90% { top: 98%; opacity: 0; } }
 .usecase-workflow { background-image: linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px); background-size: 40px 40px; }
-.usecase-progress { animation: story-progress 5s linear both; }
+
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

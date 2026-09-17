@@ -16,9 +16,9 @@ export const guides = [
     command: "openport check 3000", commandNote: "Inspect the port before you touch the process.",
     outcome: "One conflict resolved. Your database, cache and other projects stay exactly where they were.",
     steps: [
-      { title: "Locate the owner", body: "Run openport check 3000 or open the Ports view. You'll see the owning process, PID and bind address. A port number alone is not enough reason to stop a process." },
-      { title: "Make the call", body: "If the listener is a stale dev server, select it in the Ports view and press x. OpenPort shows a confirmation before it stops anything. If it belongs to another project, leave it alone." },
-      { title: "Start clean", body: "With the stale process gone, port 3000 is available to your app. Protect important listeners like your database so a future cleanup cannot catch them by mistake." },
+      { title: "Locate the owner", story: "It’s 9:02. The frontend is ready; npm run dev isn’t. Port 3000 has a ghost in it—except this ghost has a process name and a PID.", body: "Run openport check 3000 or open the Ports view. You'll see the owning process, PID and bind address. A port number alone is not enough reason to stop a process." },
+      { title: "Make the call", story: "No sweeping up every Node process. One check shows PID 5678 is yesterday’s dev server. Your database is on 5432, minding its own business.", body: "If the listener is a stale dev server, select it in the Ports view and press x. OpenPort shows a confirmation before it stops anything. If it belongs to another project, leave it alone." },
+      { title: "Start clean", story: "You confirm the one stale listener. Port 3000 clears; the database stays protected. Restart the frontend and get back to the thing you were actually building.", body: "With the stale process gone, port 3000 is available to your app. Protect important listeners like your database so a future cleanup cannot catch them by mistake." },
     ],
     frames: [
       { label: "THE BLOCK", title: "Your app can't bind :3000", command: "npm run dev", rows: [{ name: ":3000", detail: "EADDRINUSE", signal: "alert" }, { name: ":5432", detail: "database · running", signal: "muted" }, { name: ":6379", detail: "cache · running", signal: "muted" }], output: "The error gives you a port. Not a process." },
@@ -34,9 +34,9 @@ export const guides = [
     command: "openport --view aliases", commandNote: "Start naming the services you already run.",
     outcome: "Your stack reads like a map instead of a list of numbers. Project config makes that map portable with the repo.",
     steps: [
-      { title: "Name what you know", body: "Open the Aliases view and name port 3000 frontend, 5432 database and 6379 cache. The names appear beside live listeners in the Ports view." },
-      { title: "Put the map in the repo", body: "Create .openport.yml with aliases and expected_ports. OpenPort discovers the file from your working directory or a parent, even when you launch from a subdirectory." },
-      { title: "Set a guardrail", body: "Add 5432 to the project's protected list. The ordinary kill path will refuse it; overriding protection requires extra confirmation in the interface." },
+      { title: "Name what you know", story: "Monday morning. Three repos open. Every terminal says node, postgres, redis—and none of them say which project they belong to.", body: "Open the Aliases view and name port 3000 frontend, 5432 database and 6379 cache. The names appear beside live listeners in the Ports view." },
+      { title: "Put the map in the repo", story: "Give those numbers names once. Now the port table reads like the stack you recognize, not a memory test you have to repeat after every restart.", body: "Create .openport.yml with aliases and expected_ports. OpenPort discovers the file from your working directory or a parent, even when you launch from a subdirectory." },
+      { title: "Set a guardrail", story: "Add the project map to .openport.yml and protect 5432. Tomorrow, and on the next branch, your database is still clearly the database—and safer from a rushed cleanup.", body: "Add 5432 to the project's protected list. The ordinary kill path will refuse it; overriding protection requires extra confirmation in the interface." },
     ],
     frames: [
       { label: "BEFORE", title: "Just numbers, no context", command: "openport", rows: [{ name: ":3000", detail: "node", signal: "muted" }, { name: ":5432", detail: "postgres", signal: "muted" }, { name: ":6379", detail: "redis-server", signal: "muted" }], output: "Which process belongs to this project?" },
@@ -52,9 +52,9 @@ export const guides = [
     command: "openport free --near 4000", commandNote: "Ask for an available port near your usual range.",
     outcome: "The output is a bare port number. Use it in your local app or capture it in a script; reserve it if that service should keep it.",
     steps: [
-      { title: "Ask near your range", body: "Run openport free --near 4000. OpenPort skips ports that are listening, reserved, or protected, then tests whether the candidate can actually be bound." },
-      { title: "Use the result", body: "The command prints a bare number on stdout, which is easy to pass into your own app configuration or capture in a script. The port shown here is an illustration, not a promise about your machine." },
-      { title: "Keep the slot", body: "If that port belongs to a specific service, reserve it in OpenPort. Future free-port suggestions will not hand it to something else." },
+      { title: "Ask near your range", story: "A worker needs a local endpoint. You try 4000; it’s busy. 4001 is reserved. Time to stop playing port roulette.", body: "Run openport free --near 4000. OpenPort skips ports that are listening, reserved, or protected, then tests whether the candidate can actually be bound." },
+      { title: "Use the result", story: "OpenPort checks the candidates against the machine—not just the list—and prints a bare number. In this example, 4002 passes the bind check.", body: "The command prints a bare number on stdout, which is easy to pass into your own app configuration or capture in a script. The port shown here is an illustration, not a promise about your machine." },
+      { title: "Keep the slot", story: "Wire the suggested port into your app. If this worker should keep its number, reserve it. If it changes later, nothing has silently claimed that slot for good.", body: "If that port belongs to a specific service, reserve it in OpenPort. Future free-port suggestions will not hand it to something else." },
     ],
     frames: [
       { label: "THE GUESS", title: "The next number isn't always free", command: "try :4000, then :4001, then…", rows: [{ name: ":4000", detail: "already listening", signal: "alert" }, { name: ":4001", detail: "reserved", signal: "protected" }, { name: ":4002", detail: "not checked yet", signal: "muted" }], output: "A gap in the list isn't a guarantee." },
@@ -70,9 +70,9 @@ export const guides = [
     command: "openport apply web", commandNote: "After creating a blueprint named web in the UI.",
     outcome: "Applying is read-only: it tells you what's missing or displaced and suggests a next step. It never starts or kills a process for you.",
     steps: [
-      { title: "Describe the expected environment", body: "In the Blueprints view, create a blueprint called web with the services, ports and health probes your project expects." },
-      { title: "Compare against what is running", body: "Apply the blueprint in the UI or run openport apply web. OpenPort reports which services are up, absent, or blocked by a different listener." },
-      { title: "Fix with intention", body: "The report is a plan, not an automation run. Choose what to start, move or leave alone yourself. OpenPort won't kill or launch anything just because a blueprint says so." },
+      { title: "Describe the expected environment", story: "It’s almost stand-up. The app loads, but a background worker is missing. You know it should be there—you just can’t remember which port this project expects.", body: "In the Blueprints view, create a blueprint called web with the services, ports and health probes your project expects." },
+      { title: "Compare against what is running", story: "A blueprint puts expectation next to reality. Frontend: up. Database: up. Worker: not running. No archaeology through terminal tabs required.", body: "Apply the blueprint in the UI or run openport apply web. OpenPort reports which services are up, absent, or blocked by a different listener." },
+      { title: "Fix with intention", story: "You decide what to do with the missing worker. The report points; it never presses the button for you. That’s useful when the wrong “fix” could take down someone else’s service.", body: "The report is a plan, not an automation run. Choose what to start, move or leave alone yourself. OpenPort won't kill or launch anything just because a blueprint says so." },
     ],
     frames: [
       { label: "EXPECTED", title: "What this project needs", command: "blueprint: web", rows: [{ name: "frontend", detail: ":3000 · expected", signal: "active" }, { name: "database", detail: ":5432 · expected", signal: "active" }, { name: "worker", detail: ":9000 · expected", signal: "muted" }], output: "A blueprint records intent, not a running process." },
@@ -82,7 +82,7 @@ export const guides = [
   },
 ] satisfies {
   slug: string; number: string; category: string; time: string; title: string; excerpt: string; lead: string; promise: string;
-  command: string; commandNote: string; outcome: string; steps: { title: string; body: string }[]; frames: Frame[]
+  command: string; commandNote: string; outcome: string; steps: { title: string; story: string; body: string }[]; frames: Frame[]
 }[]
 
 export type Guide = (typeof guides)[number]

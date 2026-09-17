@@ -9,6 +9,7 @@ import { useEffect, useState } from "react"
 import MachineStory from "@/components/MachineStory"
 import UseCases from "@/components/UseCases"
 import UseCasePage from "@/components/UseCasePage"
+import UseCaseIndex from "@/components/UseCaseIndex"
 
 const repo = "https://github.com/SinghAman21/openport"
 const command = "go install github.com/SinghAman21/openport/cmd/openport@latest"
@@ -68,13 +69,13 @@ function Header() {
         <nav aria-label="Main navigation" className="hidden flex-wrap items-center gap-8 md:flex">
           <a className="nav-link" href="#features">Features</a>
           <a className="nav-link" href="#machine">See it in action</a>
-          <a className="nav-link" href="#use-cases">Use cases</a>
+          <a className="nav-link" href="/usecase">Use cases</a>
           <a className="nav-link" href="#install">Install</a>
         </nav>
         <div className="hidden flex-wrap items-center gap-4 md:flex"><a className="nav-link flex items-center gap-2" href={repo} target="_blank" rel="noopener noreferrer"><Github className="size-4" /> GitHub <ExternalLink className="size-3" /></a><a href="#install" className="button-lime">Get OpenPort <ArrowRight className="size-4" /></a></div>
         <button type="button" className="flex size-11 items-center justify-center rounded-lg border border-white/15 text-[#f5f7f4] transition hover:border-[#c8ff61] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61] active:bg-white/10 md:hidden" aria-label={open ? "Close menu" : "Open menu"} aria-controls="mobile-nav" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X className="size-5" /> : <Menu className="size-5" />}</button>
       </div>
-      {open && <nav id="mobile-nav" aria-label="Mobile navigation" className="flex flex-col border-t border-white/10 bg-[#0d100e] px-5 py-3 md:hidden">{[["Features", "#features"], ["See it in action", "#machine"], ["How it works", "#how-it-works"], ["Use cases", "#use-cases"], ["Install", "#install"], ["GitHub ↗", repo]].map(([label, href]) => <a key={label} className="flex min-h-12 items-center border-b border-white/10 text-sm text-[#f5f7f4] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]" href={href} onClick={() => setOpen(false)}>{label}</a>)}</nav>}
+      {open && <nav id="mobile-nav" aria-label="Mobile navigation" className="flex flex-col border-t border-white/10 bg-[#0d100e] px-5 py-3 md:hidden">{[["Features", "#features"], ["See it in action", "#machine"], ["How it works", "#how-it-works"], ["Use cases", "/usecase"], ["Install", "#install"], ["GitHub ↗", repo]].map(([label, href]) => <a key={label} className="flex min-h-12 items-center border-b border-white/10 text-sm text-[#f5f7f4] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]" href={href} onClick={() => setOpen(false)}>{label}</a>)}</nav>}
     </header>
   )
 }
@@ -149,6 +150,7 @@ function Home() {
 
 export default function App() {
   const path = window.location.pathname.replace(/\/+$/, "")
+  if (path === "/usecase") return <UseCaseIndex />
   if (path.startsWith("/usecase/")) return <UseCasePage slug={path.slice("/usecase/".length)} />
   return <Home />
 }

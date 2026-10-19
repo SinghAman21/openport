@@ -22,7 +22,7 @@ ARCH="$(uname -m)"
 case "$OS" in
   MINGW*|MSYS*|CYGWIN*)
     command -v powershell.exe >/dev/null 2>&1 || fail "PowerShell was not found"
-    PS1_URL="${OPENPORT_INSTALL_PS1_URL:-https://raw.githubusercontent.com/$REPO/main/install.ps1}"
+    PS1_URL="${OPENPORT_INSTALL_PS1_URL:-https://openport.singhaman.me/install.ps1}"
     PS1_FILE="$(mktemp)"
     trap 'rm -f "$PS1_FILE"' EXIT
     printf 'Windows shell detected; handing off to PowerShell …\n'

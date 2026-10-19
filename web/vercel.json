@@ -3,6 +3,14 @@
     {
       "source": "/install",
       "destination": "/api/install"
+    },
+    {
+      "source": "/usecase",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/usecase/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

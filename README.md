@@ -18,6 +18,38 @@ That is the whole interface. Everything else is discoverable from inside it.
 
 ## Install
 
+### Linux
+
+Install the latest prebuilt binary without installing Go:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SinghAman21/openport/main/install.sh | sh
+```
+
+The installer detects Linux `amd64` or `arm64`, installs to `~/.local/bin`, and
+explains the `PATH` step if needed.
+
+### Windows PowerShell
+
+A `.sh` file cannot run directly in native PowerShell. Use the PowerShell
+bootstrap URL:
+
+```powershell
+irm https://raw.githubusercontent.com/SinghAman21/openport/main/install.ps1 | iex
+```
+
+The installer detects Windows `amd64` or `arm64`, installs to your user-local
+bin directory, and updates your user `PATH`. Open a new PowerShell window after
+installation, then run:
+
+```powershell
+openport
+```
+
+### Go or source install
+
+If Go 1.25+ is already installed:
+
 ```bash
 go install github.com/SinghAman21/openport/cmd/openport@latest
 ```
@@ -31,8 +63,18 @@ make build      # produces ./openport
 make install    # or install into $GOBIN
 ```
 
-Requires Go 1.25+. macOS, Linux, and Windows are supported. Windows uses the
-native IP Helper and process APIs, so no external port-listing tools are needed.
+macOS, Linux, and Windows are supported. Windows uses the native IP Helper and
+process APIs, so no external port-listing tools are needed.
+
+The install scripts download assets from GitHub Releases. Release assets must
+use the names produced by `make cross`, such as `openport-linux-amd64` and
+`openport-windows-amd64.exe`.
+
+If you host these files at your own website, expose `/install.sh` for Linux and
+Git Bash/MSYS users, and `/install.ps1` for native Windows PowerShell users.
+The shell bootstrap automatically hands off to `install.ps1` when it detects
+Git Bash/MSYS/Cygwin. A single URL cannot be natively executed by both POSIX
+shells and PowerShell without a server-side installer endpoint.
 
 ---
 

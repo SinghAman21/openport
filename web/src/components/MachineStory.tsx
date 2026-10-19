@@ -45,7 +45,7 @@ export default function MachineStory() {
           <p className="max-w-[270px] border-l-2 border-[#c8ff61] pl-4 text-sm leading-relaxed text-[#c5cac5]">Watch one port conflict go from mystery to a deliberate fix.</p>
         </div>
         <div className="story-frame relative min-w-0 overflow-hidden rounded-2xl border border-white/15 bg-[#0d100e]">
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#121613] px-5 py-4 font-mono text-[10px] uppercase tracking-[.12em] text-[#a3a8a4]"><span className="flex min-w-0 flex-wrap items-center gap-2"><span className="size-2 rounded-full bg-[#c8ff61]" /> THE OPENPORT EFFECT</span><span>ILLUSTRATED SCENARIO · NOT A LIVE SCAN</span></div>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#121613] px-5 py-4 font-mono text-[10px] uppercase tracking-[.12em] text-[#a3a8a4]"><span className="flex min-w-0 flex-wrap items-center gap-2"><span className="size-2 rounded-full bg-[#c8ff61]" /> THE OPENPORT EFFECT</span><span>SCAN</span></div>
           <div className="grid min-w-0 lg:grid-cols-[minmax(0,.42fr)_minmax(0,.58fr)]">
             <div className="flex min-w-0 flex-col border-b border-white/10 p-6 sm:p-10 lg:border-b-0 lg:border-r lg:border-white/10 lg:p-12">
               <span className="font-mono text-xs text-[#c8ff61]">{stages[stage].short}</span>

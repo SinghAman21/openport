@@ -27,7 +27,14 @@ import BrandMark from "@/components/BrandMark"
 import UseCaseIndex from "@/components/UseCaseIndex";
 
 const repo = "https://github.com/SinghAman21/openport";
-const command = "curl -fsSL https://openport.singhaman.me/install.sh | sh";
+const installerURL = "https://openport.singhaman.me/install";
+
+const installCommands = {
+  linux: { label: "Linux & MacOS", command: `curl -fsSL ${installerURL} | sh`, note: "Detects Linux architecture and installs the matching release." },
+  windows: { label: "Windows", command: `irm ${installerURL} | iex`, note: "Runs natively in PowerShell and installs the matching Windows release." },
+} as const;
+
+type InstallPlatform = keyof typeof installCommands;
 
 const initialPorts = [
   {
@@ -73,61 +80,24 @@ type Port = (typeof initialPorts)[number];
 
 
 function CopyInstall({ light = false }: { light?: boolean }) {
+  const [platform, setPlatform] = useState<InstallPlatform>(() => {
+    if (typeof navigator === "undefined") return "linux";
+    if (/win/i.test(navigator.userAgent)) return "windows";
+    if (/mac/i.test(navigator.userAgent)) return "macos";
+    return "linux";
+  });
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const current = installCommands[platform];
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(command);
-      setStatus("copied");
-    } catch {
-      setStatus("error");
-    }
+    try { await navigator.clipboard.writeText(current.command); setStatus("copied"); }
+    catch { setStatus("error"); }
   }
   useEffect(() => {
     if (status === "idle") return;
     const timer = window.setTimeout(() => setStatus("idle"), 3500);
     return () => window.clearTimeout(timer);
   }, [status]);
-  return (
-    <div className="min-w-0 max-w-full">
-      <button
-        type="button"
-        onClick={copy}
-        className={`copy-command group flex min-h-14 w-full min-w-0 max-w-full flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-left transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c8ff61] active:scale-[.99] sm:px-5 ${light ? "border-[#070908]/20 bg-[#070908] text-[#f5f7f4] hover:bg-[#202820]" : "border-white/15 bg-[#121613] text-[#f5f7f4] hover:border-[#c8ff61]/50 hover:bg-[#1b211b]"}`}
-        aria-label="Copy OpenPort installer command"
-      >
-        <span className="shrink-0 font-mono text-[#c8ff61]">$</span>
-        <span className="min-w-0 flex-1 break-all font-mono text-[11px] leading-relaxed sm:text-sm">
-          {command}
-        </span>
-        <span className="ml-auto flex min-h-9 shrink-0 flex-wrap items-center gap-2 font-mono text-xs text-[#c8ff61]">
-          {status === "copied" ? (
-            <>
-              <Check className="size-4" />
-              Copied
-            </>
-          ) : status === "error" ? (
-            "Copy failed"
-          ) : (
-            <>
-              <Copy className="size-4" />
-              Copy
-            </>
-          )}
-        </span>
-      </button>
-      <span
-        className={`mt-2 block min-h-5 text-xs ${light ? "text-[#26331b]" : "text-[#a3a8a4]"}`}
-        role="status"
-        aria-live="polite"
-      >
-        {status === "error"
-          ? "Clipboard access was blocked. Select the command above to copy it manually."
-          : status === "copied"
-            ? "Install command copied to clipboard."
-            : ""}
-      </span>
-    </div>
-  );
+  return <div className="min-w-0 max-w-full"><div className="mb-3 flex min-w-0 flex-wrap gap-1.5" role="tablist" aria-label="Choose your operating system">{(Object.keys(installCommands) as InstallPlatform[]).map((id) => <button key={id} type="button" role="tab" aria-selected={platform === id} onClick={() => { setPlatform(id); setStatus("idle"); }} className={`min-h-11 rounded-lg border px-4 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 ${platform === id ? light ? "border-[#070908] bg-[#070908] text-[#f5f7f4] focus-visible:outline-[#070908]" : "border-[#c8ff61] bg-[#c8ff61] text-[#070908] focus-visible:outline-[#c8ff61]" : light ? "border-[#070908]/25 text-[#26331b] hover:border-[#070908]/60" : "border-white/20 text-[#a3a8a4] hover:border-white/45 hover:text-[#f5f7f4]"}`}>{installCommands[id].label}</button>)}</div><div role="tabpanel" className="min-w-0"><button type="button" onClick={copy} className={`copy-command group flex min-h-14 w-full min-w-0 max-w-full flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-left transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[.99] sm:px-5 ${light ? "border-[#070908]/20 bg-[#070908] text-[#f5f7f4] hover:bg-[#202820] focus-visible:outline-[#070908]" : "border-white/15 bg-[#121613] text-[#f5f7f4] hover:border-[#c8ff61]/50 hover:bg-[#1b211b] focus-visible:outline-[#c8ff61]"}`} aria-label={`Copy ${current.label} installer command`}><span className="shrink-0 font-mono text-[#c8ff61]">$</span><span className="min-w-0 flex-1 break-all font-mono text-[11px] leading-relaxed sm:text-sm">{current.command}</span><span className="ml-auto flex min-h-9 shrink-0 flex-wrap items-center gap-2 font-mono text-xs text-[#c8ff61]">{status === "copied" ? <><Check className="size-4" />Copied</> : status === "error" ? "Copy failed" : <><Copy className="size-4" />Copy</>}</span></button><p className={`mt-3 text-xs leading-relaxed ${light ? "text-[#26331b]" : "text-[#a3a8a4]"}`}>{current.note}</p><span className="mt-1 block min-h-5 text-xs text-[#c8ff61]" role="status" aria-live="polite">{status === "error" ? "Clipboard access was blocked. Select the command above to copy it manually." : status === "copied" ? "Install command copied to clipboard." : ""}</span></div></div>;
 }
 
 function Header() {

@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import MachineStory from "@/components/MachineStory";
 import UseCases from "@/components/UseCases";
 import UseCasePage from "@/components/UseCasePage";
+import BrandMark from "@/components/BrandMark"
 import UseCaseIndex from "@/components/UseCaseIndex";
 
 const repo = "https://github.com/SinghAman21/openport";
@@ -69,14 +70,7 @@ const initialPorts = [
 
 type Port = (typeof initialPorts)[number];
 
-function Mark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <span className="brand-mark-dot" />
-      <span className="brand-mark-line" />
-    </span>
-  );
-}
+
 
 function CopyInstall({ light = false }: { light?: boolean }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
@@ -154,7 +148,7 @@ function Header() {
           className="flex min-h-11 flex-wrap items-center gap-3 rounded-sm font-display text-[18px] font-bold tracking-[-.06em] text-[#f5f7f4] transition hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]"
           onClick={() => setOpen(false)}
         >
-          <Mark />
+          <BrandMark />
           openport
           <span className="self-start pt-2 font-mono text-[9px] tracking-normal text-[#c8ff61]">
             / CLI
@@ -730,7 +724,7 @@ function Home() {
             href="#top"
             className="flex min-h-11 flex-wrap items-center gap-3 font-display text-lg font-bold tracking-[-.05em] text-[#f5f7f4] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]"
           >
-            <Mark />
+            <BrandMark />
             openport
           </a>
           <p className="text-sm text-[#a3a8a4]">

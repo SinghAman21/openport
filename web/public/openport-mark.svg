@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">OpenPort mark</title>
+  <desc id="description">A tilted lime outlined square containing a signal dot and diagonal port line.</desc>
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="9" result="blur" />
+      <feFlood flood-color="#c8ff61" flood-opacity="0.26" result="color" />
+      <feComposite in="color" in2="blur" operator="in" result="glow" />
+      <feMerge><feMergeNode in="glow" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <linearGradient id="surface" x1="120" y1="90" x2="392" y2="422" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#182112" />
+      <stop offset="1" stop-color="#0a0d0b" />
+    </linearGradient>
+  </defs>
+
+  <g transform="rotate(-8 256 256)">
+    <g transform="translate(256 256) scale(1.28) translate(-256 -256)">
+      <rect x="108" y="108" width="296" height="296" rx="72" fill="url(#surface)" stroke="#c8ff61" stroke-opacity="0.72" stroke-width="12" />
+      <rect x="120" y="120" width="272" height="272" rx="61" fill="none" stroke="#d7ff8a" stroke-opacity="0.13" stroke-width="2" />
+      <g filter="url(#glow)">
+        <circle cx="207" cy="258" r="22" fill="#c8ff61" />
+        <path d="M244 258H326" stroke="#c8ff61" stroke-width="16" stroke-linecap="round" transform="rotate(-40 244 258)" />
+      </g>
+    </g>
+  </g>
+</svg>

@@ -32,9 +32,7 @@ h1, h2, h3 { text-wrap: balance; }
 .hero-grid { background-image: linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px); background-size: 48px 48px; }
 .console { background-image: radial-gradient(circle at 90% 4%, rgba(200,255,97,.035), transparent 50%); }
 
-.brand-mark { display: inline-flex; width: 32px; height: 32px; flex: none; align-items: center; justify-content: center; gap: 3px; border: 1px solid rgba(200,255,97,.5); border-radius: 8px; background: rgba(200,255,97,.1); transform: rotate(-8deg); }
-.brand-mark-dot { width: 6px; height: 6px; border-radius: 50%; background: #c8ff61; }
-.brand-mark-line { width: 12px; height: 2px; background: #c8ff61; transform: rotate(-40deg); transform-origin: left center; }
+.brand-mark-image { display: block; flex: none; object-fit: contain; }
 
 .nav-link { display: inline-flex; min-height: 44px; align-items: center; flex-wrap: wrap; color: #c5cac5; font-size: 13px; font-weight: 600; transition: color .2s ease; }
 .nav-link:hover, .nav-link:focus-visible { color: #c8ff61; }

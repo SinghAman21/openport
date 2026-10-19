@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, ArrowUpRight, Github } from "lucide-react";
 import { useEffect } from "react";
 
+import BrandMark from "@/components/BrandMark";
 import UseCaseRows from "@/components/UseCaseRows";
 
 export default function UseCaseIndex() {
@@ -15,10 +16,7 @@ export default function UseCaseIndex() {
             href="/"
             className="inline-flex min-h-11 flex-wrap items-center gap-3 font-display text-lg font-bold tracking-[-.055em] text-[#f5f7f4] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]"
           >
-            <span className="brand-mark" aria-hidden="true">
-              <span className="brand-mark-dot" />
-              <span className="brand-mark-line" />
-            </span>{" "}
+            <BrandMark />
             openport{" "}
             <span className="font-mono text-[10px] font-normal tracking-normal text-[#a3a8a4]">
               / FIELD NOTES

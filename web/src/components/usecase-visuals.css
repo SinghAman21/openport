@@ -1,0 +1,88 @@
+.usecase-visual{--uv-lime:#c8ff61;--uv-rose:#fb7185;--uv-blue:#7dd3fc;min-width:0;max-width:100%;overflow:hidden;border:1px solid #ffffff26;border-radius:16px;background:#0b0f0d;color:#f5f7f4;font-family:var(--font-mono);box-sizing:border-box}
+.usecase-visual *{box-sizing:border-box;min-width:0}
+.uv-caption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid #ffffff1f;color:#a3a8a4;font-size:10px;letter-spacing:.1em}
+.uv-stage{padding:20px 16px;overflow:hidden}
+.uv-scene{position:relative;width:100%;min-height:216px;padding:16px;border-radius:12px;overflow:hidden;font-size:11px;line-height:1.5}
+.uv-summary{display:grid;gap:6px;padding:14px 16px;border-top:1px solid #ffffff26;background:#121613;font-size:11px;line-height:1.6;overflow-wrap:anywhere;color:#bfc9bf}
+.uv-summary strong{color:var(--uv-lime);font-size:13px}
+.uv-summary span:last-child{color:#f5f7f4}
+/* Conflict: two endpoints collide, then the owner clears the route. */
+.uv-conflict{display:flex;flex-direction:column;justify-content:center;gap:16px;background:repeating-linear-gradient(0deg,#121815 0 1px,#0e1310 1px 26px)}
+.uv-conflict-track{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.uv-conflict-app,.uv-conflict-owner{flex:0 1 42%;padding:14px 8px;border:1px solid #ffffff33;border-radius:8px;text-align:center;overflow-wrap:anywhere}
+.uv-conflict-app{border-color:var(--uv-lime);color:var(--uv-lime)}
+.uv-conflict-app strong{font-size:18px}.uv-conflict-owner{color:var(--uv-rose);border-color:var(--uv-rose)}
+.uv-conflict-barrier{flex:0 0 28px;text-align:center;color:var(--uv-rose);font-size:26px}
+.uv-conflict[data-stage="2"] .uv-conflict-owner,.uv-conflict[data-stage="2"] .uv-conflict-barrier{color:var(--uv-lime);border-color:var(--uv-lime)}
+.uv-conflict-neighbors{display:flex;flex-wrap:wrap;gap:6px;color:var(--uv-blue)}.uv-conflict-neighbors span{padding:4px 7px;border:1px solid #7dd3fc55;border-radius:4px}
+.uv-scene-note{margin:0;color:#a3a8a4}
+.uv-conflict-track{animation:uv-collision .42s ease-out both}
+@keyframes uv-collision{from{gap:24px;opacity:.8}to{gap:5px;opacity:1}}
+/* Stack: aliases snap onto port pins, then the map becomes project config. */
+.uv-stack{display:flex;flex-direction:column;justify-content:space-between;gap:16px;background:#141712}
+.uv-stack-map{display:grid;gap:8px}.uv-stack-service{display:flex;align-items:center;gap:0}
+.uv-stack-port{width:65px;flex:none;padding:8px 4px;text-align:center;border:1px solid #ffffff30;border-radius:5px;color:#f5f7f4}
+.uv-stack-connector{width:clamp(12px,9%,44px);height:1px;flex:none;background:var(--uv-lime)}
+.uv-stack-alias{padding:8px;border:1px solid #c8ff6160;border-radius:5px;color:var(--uv-lime);overflow-wrap:anywhere}
+.uv-stack[data-stage="0"] .uv-stack-alias{color:#a3a8a4;border-style:dashed}
+.uv-stack-file{padding:9px;border-top:1px dashed #ffffff50;color:var(--uv-blue);overflow-wrap:anywhere}
+.uv-stack-alias{animation:uv-attach .38s ease-out both}.uv-stack-service:nth-child(2) .uv-stack-alias{animation-delay:.08s}.uv-stack-service:nth-child(3) .uv-stack-alias{animation-delay:.16s}
+@keyframes uv-attach{from{transform:translateX(18px);opacity:.7}to{transform:translateX(0);opacity:1}}
+/* Free port: scan the numbered candidates, never imply a free port is reserved automatically. */
+.uv-free{display:flex;flex-direction:column;justify-content:space-between;gap:24px;background:linear-gradient(90deg,#172021,#0d1414)}
+.uv-free-ruler{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;border-top:2px solid #7dd3fc80}
+.uv-free-candidate{display:grid;align-content:start;gap:6px;padding:0 3px;overflow-wrap:anywhere;color:#b8c2bb}
+.uv-free-candidate strong{font-size:clamp(12px,4vw,18px);color:#f5f7f4}.uv-free-candidate small{font-size:10px}.uv-free-tick{width:2px;height:22px;background:var(--uv-blue)}
+.uv-free-candidate-0{color:var(--uv-rose)}.uv-free-candidate-1{color:var(--uv-blue)}
+.uv-free[data-stage="1"] .uv-free-candidate-2,.uv-free[data-stage="2"] .uv-free-candidate-2{color:var(--uv-lime)}
+.uv-free-result{align-self:flex-start;padding:8px 10px;border:1px solid currentColor;border-radius:4px;color:var(--uv-lime);overflow-wrap:anywhere}
+.uv-free-tick{animation:uv-scan .35s ease-out both}.uv-free-candidate:nth-child(2) .uv-free-tick{animation-delay:.12s}.uv-free-candidate:nth-child(3) .uv-free-tick{animation-delay:.24s}
+@keyframes uv-scan{from{height:8px;opacity:.7}to{height:22px;opacity:1}}
+/* Blueprint: a side-by-side ledger reveals the absent worker as a diff. */
+.uv-blueprint{display:flex;flex-direction:column;justify-content:space-between;gap:18px;background:#14151b}
+.uv-blueprint-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.uv-blueprint-columns>div{display:grid;align-content:start;gap:5px;padding:7px;border:1px solid #ffffff2d}
+.uv-blueprint-columns b{margin-bottom:5px;color:var(--uv-blue);font-size:10px;overflow-wrap:anywhere}
+.uv-blueprint-columns span{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px;padding:5px 3px;border-bottom:1px solid #ffffff20;overflow-wrap:anywhere}
+.uv-blueprint-columns em{color:#a3a8a4;font-style:normal}.uv-blueprint-columns .uv-blueprint-missing{color:var(--uv-rose);background:#fb718514}
+.uv-blueprint-diff{padding:8px;border-left:3px solid var(--uv-rose);color:var(--uv-rose);overflow-wrap:anywhere}
+.uv-blueprint-columns>div:last-child{animation:uv-diff .4s ease-out both}
+@keyframes uv-diff{from{clip-path:inset(0 30% 0 0)}to{clip-path:inset(0 0 0 0)}}
+/* Watch mode: a one-way playhead traverses the restart timeline. */
+.uv-watch{display:flex;flex-direction:column;justify-content:center;gap:12px;background:repeating-linear-gradient(90deg,#101719 0 1px,#131d1e 1px 28px)}
+.uv-watch-line{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;border-bottom:2px solid var(--uv-blue)}
+.uv-watch-node{position:relative;padding:8px 2px 14px;text-align:center;overflow-wrap:anywhere;color:var(--uv-blue)}
+.uv-watch-node:after{content:"";position:absolute;bottom:-5px;left:50%;width:8px;height:8px;border-radius:50%;background:currentColor}
+.uv-watch-gap{color:var(--uv-rose)}.uv-watch-new{color:var(--uv-lime)}
+.uv-watch[data-stage="0"] .uv-watch-gap,.uv-watch[data-stage="0"] .uv-watch-new,.uv-watch[data-stage="1"] .uv-watch-new{opacity:.25}
+.uv-watch-playhead{position:absolute;top:22%;bottom:28%;left:var(--uv-left);width:2px;background:var(--uv-lime);pointer-events:none}
+.uv-watch[data-stage="0"]{--uv-left:17%}.uv-watch[data-stage="1"]{--uv-left:50%}.uv-watch[data-stage="2"]{--uv-left:83%}
+.uv-watch-time{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;font-size:9px;text-align:center;color:#a3a8a4;overflow-wrap:anywhere}
+.uv-watch-readout{padding:8px;border:1px solid #7dd3fc66;color:var(--uv-lime);overflow-wrap:anywhere}.uv-watch-readout small{color:var(--uv-blue)}
+.uv-watch-playhead{animation:uv-timeline .4s ease-out both}
+@keyframes uv-timeline{from{transform:translateX(-20px);opacity:.7}to{transform:translateX(0);opacity:1}}
+/* Groups: three members converge on a health-check hub, then the confirmation gate appears. */
+.uv-groups{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#171511;text-align:center}
+.uv-groups-cluster{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:5px}
+.uv-groups-member{z-index:1;display:grid;align-content:center;gap:4px;min-height:64px;padding:9px 3px;border:1px solid #c8ff6177;border-radius:25px;color:var(--uv-lime);font-size:12px;overflow-wrap:anywhere}
+.uv-groups-member small{font-size:9px;color:#c5cac5}.uv-groups-branches{position:absolute;top:50%;left:15%;right:15%;border-top:1px solid var(--uv-lime)}
+.uv-groups-base{max-width:100%;padding:8px 10px;border:1px solid var(--uv-lime);border-radius:20px;color:var(--uv-lime);overflow-wrap:anywhere}
+.uv-groups-confirm{color:var(--uv-rose);font-size:10px;overflow-wrap:anywhere}
+.uv-groups[data-stage="0"] .uv-groups-branches{opacity:0}
+.uv-groups[data-stage="0"] .uv-groups-member{border-color:#ffffff40;color:#a3a8a4}
+.uv-groups-member{animation:uv-gather .35s ease-out both}.uv-groups-member:nth-child(3){animation-delay:.07s}.uv-groups-member:nth-child(4){animation-delay:.14s}
+@keyframes uv-gather{from{transform:translateY(-14px) scale(.92);opacity:.75}to{transform:translateY(0) scale(1);opacity:1}}
+/* Protected ports: the shield physically interrupts the request before the refusal. */
+.uv-protected{display:flex;flex-direction:column;justify-content:center;gap:16px;background:repeating-linear-gradient(135deg,#101822 0 2px,#0e141a 2px 14px)}
+.uv-protected-gate{display:flex;align-items:center;justify-content:space-between;gap:5px;text-align:center}
+.uv-protected-target,.uv-protected-verdict{flex:1 1 35%;padding:10px 4px;border:1px solid #ffffff40;border-radius:5px;overflow-wrap:anywhere}
+.uv-protected-target strong{display:block;color:var(--uv-rose)}
+.uv-protected-shield{flex:0 0 70px;display:grid;place-items:center;min-height:88px;border:3px solid var(--uv-blue);border-radius:42% 42% 50% 50%;background:#7dd3fc19;color:var(--uv-blue);font-size:28px}
+.uv-protected-shield small{font-size:9px}.uv-protected-verdict{color:var(--uv-rose)}
+.uv-protected[data-stage="2"] .uv-protected-verdict{border-color:var(--uv-blue);color:var(--uv-blue)}
+.uv-protected-foot{margin:0;color:#a3a8a4;overflow-wrap:anywhere}
+.uv-protected-shield{animation:uv-gate .38s ease-out both}
+@keyframes uv-gate{from{transform:scale(.78) rotate(-10deg);opacity:.75}to{transform:scale(1) rotate(0);opacity:1}}
+.uv-reduced *, .uv-reduced *::before, .uv-reduced *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media (prefers-reduced-motion:reduce){.usecase-visual *, .usecase-visual *::before, .usecase-visual *::after{animation:none!important;transition:none!important}}
+@media (max-width:380px){.uv-stage{padding:12px 8px}.uv-scene{padding:10px;font-size:10px}.uv-protected-shield{flex-basis:52px;min-height:68px;font-size:20px}.uv-groups-member{padding:7px 2px}.uv-groups-member small{font-size:8px}}

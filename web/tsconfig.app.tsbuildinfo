@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/components/ui/button.tsx","./src/lib/utils.ts"],"version":"5.7.3"}
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/MachineStory.tsx","./src/components/UseCaseIndex.tsx","./src/components/UseCasePage.tsx","./src/components/UseCaseRows.tsx","./src/components/UseCaseVisual.tsx","./src/components/UseCases.tsx","./src/components/ui/button.tsx","./src/lib/usecases.ts","./src/lib/utils.ts"],"version":"5.7.3"}

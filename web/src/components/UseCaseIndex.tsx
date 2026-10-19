@@ -1,15 +1,113 @@
-import { ArrowLeft, ArrowRight, ArrowUpRight, FileCode2, Github, LockKeyhole, Radar, Route, Sparkles } from "lucide-react"
-import { useEffect } from "react"
+import { ArrowLeft, ArrowRight, ArrowUpRight, Github } from "lucide-react";
+import { useEffect } from "react";
 
-import { guides } from "@/lib/usecases"
-
-const icons = [Radar, FileCode2, Route, LockKeyhole]
+import UseCaseRows from "@/components/UseCaseRows";
 
 export default function UseCaseIndex() {
-  useEffect(() => { document.title = "OpenPort Field Notes — Make your local machine make sense" }, [])
-  return <div className="site min-h-screen overflow-x-hidden bg-[#070908] text-[#f5f7f4]"><header className="border-b border-white/10 bg-[#070908]"><div className="mx-auto flex min-h-[76px] max-w-[1344px] flex-wrap items-center justify-between gap-3 px-5 sm:px-8 lg:px-12"><a href="/" className="inline-flex min-h-11 flex-wrap items-center gap-3 font-display text-lg font-bold tracking-[-.055em] text-[#f5f7f4] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]"><span className="brand-mark" aria-hidden="true"><span className="brand-mark-dot" /><span className="brand-mark-line" /></span> openport <span className="font-mono text-[10px] font-normal tracking-normal text-[#a3a8a4]">/ FIELD NOTES</span></a><a href="/" className="nav-link gap-2"><ArrowLeft className="size-4" /> Back to OpenPort</a></div></header><main>
-    <section className="hero-grid border-b border-white/10 px-5 pb-16 pt-12 sm:px-8 sm:pb-24 sm:pt-16 lg:px-12"><div className="mx-auto max-w-[1344px] min-w-0"><p className="eyebrow flex flex-wrap items-center gap-2"><Sparkles className="size-4" /> OPENPORT FIELD NOTES / A PRACTICAL GUIDEBOOK</p><div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,.42fr)] lg:items-end"><div className="min-w-0"><h1 className="max-w-[900px] font-display text-[clamp(3.2rem,7vw,7.5rem)] font-bold leading-[.94] tracking-[-.075em]">Less guessing.<br /><span className="text-[#c8ff61]">More knowing.</span></h1></div><div className="min-w-0 border-l-2 border-[#c8ff61] pl-5"><p className="font-display text-xl font-semibold leading-snug sm:text-2xl">A port conflict at 9:02. A stack with no names. One too many guesses.</p><p className="mt-4 text-sm leading-[1.8] text-[#c5cac5]">Short, illustrated stories for the moments OpenPort earns its place in your workflow. Pick your problem. Watch the fix. Try it in your terminal.</p></div></div><div className="mt-12 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 font-mono text-[10px] uppercase tracking-[.15em] text-[#a3a8a4]"><span>4 USE CASES</span><span className="text-[#c8ff61]">·</span><span>2–3 MIN EACH</span><span className="text-[#c8ff61]">·</span><span>LOCAL-FIRST, ALWAYS</span></div></div></section>
-    <section className="px-5 py-14 sm:px-8 sm:py-20 lg:px-12" aria-label="All OpenPort use cases"><div className="mx-auto max-w-[1344px] min-w-0"><div className="mb-8 flex min-w-0 flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">START WITH THE MOMENT</p><h2 className="mt-3 font-display text-3xl font-bold tracking-[-.05em] sm:text-4xl">Which one sounds familiar?</h2></div><a href="/#install" className="nav-link gap-2 text-[#c8ff61]">Get OpenPort <ArrowUpRight className="size-4" /></a></div><div className="grid min-w-0 gap-4 lg:grid-cols-2">{guides.map((guide, index) => { const Icon = icons[index]; return <article key={guide.slug} className="usecase-index-card group min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0d100e] transition-colors duration-200 hover:border-[#c8ff61]/40 hover:bg-[#121613]"><div className="grid min-w-0 sm:grid-cols-[minmax(0,1fr)_minmax(180px,.64fr)]"><div className="flex min-w-0 flex-col p-6 sm:p-8"><div className="flex min-w-0 flex-wrap items-start justify-between gap-4"><span className="flex size-11 items-center justify-center rounded-xl border border-[#c8ff61]/30 bg-[#c8ff61]/[.08] text-[#c8ff61]"><Icon className="size-5" strokeWidth={1.7} /></span><span className="font-mono text-xs text-[#a3a8a4]">/ {guide.number}</span></div><p className="mt-8 font-mono text-[10px] uppercase tracking-[.13em] text-[#c8ff61]">{guide.category} <span className="text-[#a3a8a4]">· {guide.time}</span></p><h3 className="mt-3 max-w-md break-words font-display text-2xl font-bold leading-[1.13] tracking-[-.045em] sm:text-[27px]">{guide.title}</h3><p className="mt-4 max-w-md text-sm leading-[1.75] text-[#c5cac5]">{guide.steps[0].story}</p></div><div className="relative flex min-w-0 flex-col justify-center overflow-hidden border-t border-white/10 bg-[#070908] p-5 sm:border-l sm:border-t-0"><div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(200,255,97,.055),transparent_70%)]" /><p className="relative mb-4 font-mono text-[9px] uppercase tracking-[.13em] text-[#a3a8a4]">A 3-STEP FIELD NOTE</p><div className="relative flex min-w-0 items-center gap-1">{guide.frames.map((frame, step) => <div key={frame.label} className="flex min-w-0 flex-1 items-center"><span className={`grid size-8 shrink-0 place-items-center rounded-full border font-mono text-[10px] ${step === 0 ? "border-[#fb7185]/40 bg-[#fb7185]/10 text-[#fb7185]" : step === 2 ? "border-[#c8ff61]/40 bg-[#c8ff61]/10 text-[#c8ff61]" : "border-white/15 text-[#a3a8a4]"}`}>{String(step + 1).padStart(2, "0")}</span>{step < 2 && <span className="mx-1 h-px min-w-2 flex-1 bg-white/15"><span className="block h-px w-1/2 bg-[#c8ff61]/50" /></span>}</div>)}</div><p className="relative mt-5 min-h-10 break-words font-mono text-[10px] leading-relaxed text-[#a3a8a4]">{guide.frames[2].output}</p><div className="relative mt-auto border-t border-white/10 pt-4 font-mono text-[10px] text-[#c8ff61]">{guide.command}</div></div></div><a href={`/usecase/${guide.slug}`} className="flex min-h-14 min-w-0 flex-wrap items-center justify-between gap-3 border-t border-white/10 px-6 py-4 font-mono text-xs font-medium text-[#c8ff61] transition-colors hover:bg-[#c8ff61]/[.08] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#c8ff61] active:bg-[#c8ff61]/15 sm:px-8"><span>Read the story / Watch the workflow</span><ArrowRight className="size-4 transition-transform group-hover:translate-x-1" /></a></article> })}</div></div></section>
-    <section className="border-y border-white/10 bg-[#c8ff61] px-5 py-8 text-[#070908] sm:px-8 lg:px-12"><div className="mx-auto flex max-w-[1344px] min-w-0 flex-wrap items-center justify-between gap-4"><p className="max-w-2xl font-display text-xl font-bold tracking-[-.035em] sm:text-2xl">Your machine has a story. Make it easier to read.</p><a href="/#install" className="inline-flex min-h-11 flex-wrap items-center gap-2 rounded-lg bg-[#070908] px-5 font-semibold text-[#f5f7f4] transition hover:bg-[#202820] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#070908]">Get started <ArrowRight className="size-4" /></a></div></section>
-    </main><footer className="border-t border-white/10 px-5 py-7 sm:px-8 lg:px-12"><div className="mx-auto flex max-w-[1344px] min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-[#a3a8a4]"><a href="/" className="flex min-h-11 items-center gap-2 hover:text-[#c8ff61]"><ArrowLeft className="size-4" /> OpenPort home</a><a href="https://github.com/SinghAman21/openport" target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center gap-2 hover:text-[#c8ff61]"><Github className="size-4" /> Source & full docs <ArrowUpRight className="size-3" /></a></div></footer></div>
+  useEffect(() => {
+    document.title = "OpenPort Field Notes — Seven ways to get unstuck";
+  }, []);
+  return (
+    <div className="site min-h-screen overflow-x-hidden bg-[#070908] text-[#f5f7f4]">
+      <header className="border-b border-white/10">
+        <div className="mx-auto flex min-h-[76px] max-w-[1344px] flex-wrap items-center justify-between gap-3 px-5 sm:px-8 lg:px-12">
+          <a
+            href="/"
+            className="inline-flex min-h-11 flex-wrap items-center gap-3 font-display text-lg font-bold tracking-[-.055em] text-[#f5f7f4] hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]"
+          >
+            <span className="brand-mark" aria-hidden="true">
+              <span className="brand-mark-dot" />
+              <span className="brand-mark-line" />
+            </span>{" "}
+            openport{" "}
+            <span className="font-mono text-[10px] font-normal tracking-normal text-[#a3a8a4]">
+              / FIELD NOTES
+            </span>
+          </a>
+          <a href="/" className="nav-link gap-2">
+            <ArrowLeft className="size-4" /> Back to OpenPort
+          </a>
+        </div>
+      </header>
+      <main>
+        <section className="hero-grid border-b border-white/10 px-5 pb-16 pt-14 sm:px-8 sm:pb-24 sm:pt-20 lg:px-12">
+          <div className="mx-auto max-w-[1344px] min-w-0">
+            <p className="eyebrow">A FIELD GUIDE / 07 REAL MOMENTS</p>
+            <div className="mt-7 grid min-w-0 gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,.42fr)] lg:items-end">
+              <h1 className="max-w-[920px] min-w-0 break-words font-display text-[clamp(3.2rem,7vw,7.4rem)] font-bold leading-[.96] tracking-[-.075em]">
+                Your machine is
+                <br />
+                <span className="text-[#c8ff61]">trying to tell you.</span>
+              </h1>
+              <div className="max-w-[390px] min-w-0 border-l-2 border-[#c8ff61] pl-5">
+                <p className="font-display text-xl font-semibold leading-snug sm:text-2xl">
+                  Different problem. Same question: what’s happening on my
+                  machine?
+                </p>
+                <p className="mt-4 text-sm leading-[1.8] text-[#c5cac5]">
+                  Seven short stories about the errors, restarts and messy local
+                  stacks developers actually face. Choose the moment that feels
+                  familiar.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section
+          className="px-5 py-16 sm:px-8 sm:py-24 lg:px-12"
+          aria-labelledby="index-title"
+        >
+          <div className="mx-auto max-w-[1344px] min-w-0">
+            <div className="mb-9 flex min-w-0 flex-wrap items-end justify-between gap-6">
+              <div>
+                <p className="eyebrow">PICK YOUR PROBLEM</p>
+                <h2
+                  id="index-title"
+                  className="mt-3 font-display text-3xl font-bold tracking-[-.05em] sm:text-4xl"
+                >
+                  Where are you stuck?
+                </h2>
+              </div>
+              <p className="max-w-[240px] font-mono text-xs leading-relaxed text-[#a3a8a4]">
+                PROBLEM → OLD APPROACH → THE OPENPORT WAY
+              </p>
+            </div>
+            <UseCaseRows />
+          </div>
+        </section>
+        <section className="border-y border-white/10 bg-[#c8ff61] px-5 py-8 text-[#070908] sm:px-8 lg:px-12">
+          <div className="mx-auto flex max-w-[1344px] min-w-0 flex-wrap items-center justify-between gap-4">
+            <p className="max-w-2xl font-display text-xl font-bold tracking-[-.035em] sm:text-2xl">
+              One command to see what’s running.
+            </p>
+            <a
+              href="/#install"
+              className="inline-flex min-h-11 flex-wrap items-center gap-2 rounded-lg bg-[#070908] px-5 font-semibold text-[#f5f7f4] transition hover:bg-[#202820] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#070908]"
+            >
+              Get OpenPort <ArrowRight className="size-4" />
+            </a>
+          </div>
+        </section>
+      </main>
+      <footer className="border-t border-white/10 px-5 py-7 sm:px-8 lg:px-12">
+        <div className="mx-auto flex max-w-[1344px] min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-[#a3a8a4]">
+          <a
+            href="/"
+            className="flex min-h-11 items-center gap-2 hover:text-[#c8ff61]"
+          >
+            <ArrowLeft className="size-4" /> OpenPort home
+          </a>
+          <a
+            href="https://github.com/SinghAman21/openport"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 items-center gap-2 hover:text-[#c8ff61]"
+          >
+            <Github className="size-4" /> Source & docs{" "}
+            <ArrowUpRight className="size-3" />
+          </a>
+        </div>
+      </footer>
+    </div>
+  );
 }

@@ -33,9 +33,11 @@ export default function UseCaseIndex() {
             <p className="eyebrow">A FIELD GUIDE / 07 REAL MOMENTS</p>
             <div className="mt-7 grid min-w-0 gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,.42fr)] lg:items-end">
               <h1 className="max-w-[920px] min-w-0 break-words font-display text-[clamp(3.2rem,7vw,7.4rem)] font-bold leading-[.96] tracking-[-.075em]">
-                Your machine is
+                {/*Your machine is*/}
+                Less guessing
                 <br />
-                <span className="text-[#c8ff61]">trying to tell you.</span>
+                {/*<span className="text-[#c8ff61]">trying to tell you.</span>*/}
+                <span className="text-[#c8ff61]">More knowing.</span>
               </h1>
               <div className="max-w-[390px] min-w-0 border-l-2 border-[#c8ff61] pl-5">
                 <p className="font-display text-xl font-semibold leading-snug sm:text-2xl">

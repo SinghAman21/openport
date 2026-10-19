@@ -83,7 +83,7 @@ function CopyInstall({ light = false }: { light?: boolean }) {
   const [platform, setPlatform] = useState<InstallPlatform>(() => {
     if (typeof navigator === "undefined") return "linux";
     if (/win/i.test(navigator.userAgent)) return "windows";
-    if (/mac/i.test(navigator.userAgent)) return "macos";
+    if (/mac/i.test(navigator.userAgent)) return "linux";
     return "linux";
   });
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
@@ -114,7 +114,7 @@ function Header() {
     <header className="relative z-20 border-b border-white/10 bg-[#070908]">
       <div className="mx-auto flex min-h-[76px] max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 sm:px-8 lg:px-12">
         <a
-          href="#top"
+          href=""
           className="flex min-h-11 flex-wrap items-center gap-3 rounded-sm font-display text-[18px] font-bold tracking-[-.06em] text-[#f5f7f4] transition hover:text-[#c8ff61] focus-visible:outline-2 focus-visible:outline-[#c8ff61]"
           onClick={() => setOpen(false)}
         >
